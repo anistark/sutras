@@ -26,15 +26,15 @@ qa: format lint check
 
 # Run tests
 test:
-    uv run pytest
+    uv run python -m pytest
 
 # Run tests with coverage
 test-cov:
-    uv run pytest --cov=sutras --cov-report=term-missing
+    uv run python -m pytest --cov=sutras --cov-report=term-missing
 
 # Run tests in verbose mode
 test-verbose:
-    uv run pytest -v
+    uv run python -m pytest -v
 
 # Build distribution packages
 build:
@@ -63,10 +63,13 @@ publish: clean build
     @echo "🔨 Building package..."
     uv build --sdist --wheel
     @echo "📦 Publishing to PyPI..."
-    uv run twine upload dist/*
+    uv publish
 
 # Publish to Test PyPI
 publish-test: clean build
+    @echo "🔨 Building package..."
+    uv build --sdist --wheel
+    @echo "📦 Publishing to Test PyPI..."
     uv publish --publish-url https://test.pypi.org/legacy/
 
 # Run all checks before commit

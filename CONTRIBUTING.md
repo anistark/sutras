@@ -113,16 +113,16 @@ All commands can also be run manually with `uv run` (see below).
 
 ```sh
 # Run all tests
-uv run pytest
+uv run python -m pytest
 
 # Run tests with coverage
-uv run pytest --cov=sutras --cov-report=term-missing
+uv run python -m pytest --cov=sutras --cov-report=term-missing
 
 # Run specific test file
-uv run pytest tests/test_skill.py
+uv run python -m pytest tests/test_skill.py
 
 # Run tests in verbose mode
-uv run pytest -v
+uv run python -m pytest -v
 ```
 
 ### Code Quality
