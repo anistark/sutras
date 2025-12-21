@@ -1,0 +1,18 @@
+version: "1.0.0"
+author: "Ability Team"
+license: "MIT"
+repository: "https://github.com/anistark/ability"
+
+# Capability declarations
+capabilities:
+  tools: [Read, Write]
+  dependencies: []
+  constraints: {}
+
+# Distribution metadata
+distribution:
+  tags: ["example", "demo", "greeting", "hello-world"]
+  category: "examples"
+  keywords: ["hello", "greeting", "demo", "tutorial"]
+  homepage: "https://github.com/anistark/ability"
+  documentation: "https://github.com/anistark/ability#readme"

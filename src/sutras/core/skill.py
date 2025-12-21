@@ -1,4 +1,4 @@
-"""Skill model combining Anthropic SKILL.md with Ability ABI."""
+"""Skill model combining Anthropic SKILL.md with Sutras ABI."""
 
 import re
 from dataclasses import dataclass, field
@@ -7,7 +7,7 @@ from typing import Any
 
 import yaml
 
-from ability.core.abi import AbilityABI
+from sutras.core.abi import SutrasABI
 
 
 @dataclass
@@ -38,18 +38,18 @@ class SkillMetadata:
 
 @dataclass
 class Skill:
-    """A skill combining Anthropic SKILL.md format with Ability ABI.
+    """A skill combining Anthropic SKILL.md format with Sutras ABI.
 
     Represents a complete skill with:
     - SKILL.md: Anthropic Skills format with frontmatter
-    - ability.yaml: Ability ABI metadata (optional)
+    - sutras.yaml: Sutras ABI metadata (optional)
     - Supporting files: reference.md, examples.md, etc.
     """
 
     path: Path
     metadata: SkillMetadata
     instructions: str
-    abi: AbilityABI | None = None
+    abi: SutrasABI | None = None
     supporting_files: dict[str, Path] = field(default_factory=dict)
 
     @property
@@ -99,17 +99,21 @@ class Skill:
         content = skill_md.read_text()
         metadata, instructions = cls._parse_skill_md(content)
 
-        # Load ability.yaml if present
+        # Load sutras.yaml if present (also check ability.yaml for backward compatibility)
         abi = None
+        sutras_yaml = skill_path / "sutras.yaml"
         ability_yaml = skill_path / "ability.yaml"
-        if ability_yaml.exists():
+        if sutras_yaml.exists():
+            abi_data = yaml.safe_load(sutras_yaml.read_text())
+            abi = SutrasABI(**abi_data)
+        elif ability_yaml.exists():
             abi_data = yaml.safe_load(ability_yaml.read_text())
-            abi = AbilityABI(**abi_data)
+            abi = SutrasABI(**abi_data)
 
         # Discover supporting files
         supporting_files = {}
         for file_path in skill_path.glob("*"):
-            if file_path.is_file() and file_path.name not in ["SKILL.md", "ability.yaml"]:
+            if file_path.is_file() and file_path.name not in ["SKILL.md", "sutras.yaml", "ability.yaml"]:
                 supporting_files[file_path.name] = file_path
 
         return cls(

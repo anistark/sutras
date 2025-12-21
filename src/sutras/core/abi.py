@@ -1,6 +1,6 @@
-"""Ability ABI (Application Binary Interface) definitions.
+"""Sutras ABI (Application Binary Interface) definitions.
 
-Defines the schema for ability.yaml files that extend Anthropic Skills
+Defines the schema for sutras.yaml files that extend Anthropic Skills
 with lifecycle metadata for testing, evaluation, and distribution.
 """
 
@@ -54,11 +54,11 @@ class DistributionMetadata(BaseModel):
     keywords: list[str] = Field(default_factory=list, description="Search keywords")
 
 
-class AbilityABI(BaseModel):
-    """Complete Ability ABI specification.
+class SutrasABI(BaseModel):
+    """Complete Sutras ABI specification.
 
     This extends Anthropic Skills (SKILL.md) with lifecycle metadata
-    stored in ability.yaml.
+    stored in sutras.yaml.
     """
 
     # Core metadata

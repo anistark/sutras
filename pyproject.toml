@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "ability"
+name = "sutras"
 version = "0.1.0"
 description = "Devtool for creating, testing, and distributing Anthropic Agent Skills with lifecycle management and Skill ABI"
 readme = "README.md"
@@ -37,19 +37,19 @@ eval = [
 ]
 
 [project.scripts]
-ability = "ability.cli.main:cli"
+sutras = "sutras.cli.main:cli"
 
 [project.urls]
-Homepage = "https://github.com/anistark/ability"
-Documentation = "https://github.com/anistark/ability#readme"
-Repository = "https://github.com/anistark/ability"
+Homepage = "https://github.com/anistark/sutras"
+Documentation = "https://github.com/anistark/sutras#readme"
+Repository = "https://github.com/anistark/sutras"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/ability"]
+packages = ["src/sutras"]
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "/src/ability",
+    "/src/sutras",
     "/tests",
     "/examples",
     "/README.md",
@@ -61,6 +61,7 @@ dev-dependencies = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "ruff>=0.1.0",
+    "twine>=6.2.0",
     "ty>=0.0.5",
 ]
 

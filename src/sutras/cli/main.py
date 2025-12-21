@@ -1,17 +1,17 @@
-"""Main CLI entry point for ability - skill devtool."""
+"""Main CLI entry point for sutras - skill devtool."""
 
 from pathlib import Path
 
 import click
 
-from ability import SkillLoader, __version__
+from sutras import SkillLoader, __version__
 
 
 @click.group()
 @click.version_option(version=__version__)
 def cli() -> None:
     """
-    Ability - Devtool for Anthropic Agent Skills.
+    Sutras - Devtool for Anthropic Agent Skills.
 
     Create, evaluate, test, distribute, and discover skills with ease.
     """
@@ -37,7 +37,7 @@ def list(local: bool, global_: bool) -> None:
 
     if not skills:
         click.echo("No skills found.")
-        click.echo("\nCreate a new skill with: ability new <skill-name>")
+        click.echo("\nCreate a new skill with: sutras new <skill-name>")
         return
 
     click.echo(f"Found {len(skills)} skill(s):\n")
@@ -173,9 +173,9 @@ Provide concrete examples of how this skill works.
 
     (skill_dir / "SKILL.md").write_text(skill_md_content)
 
-    # Create ability.yaml
+    # Create sutras.yaml
     author = author or "Skill Author"
-    ability_yaml_content = f"""version: "0.1.0"
+    sutras_yaml_content = f"""version: "0.1.0"
 author: "{author}"
 license: "MIT"
 
@@ -205,7 +205,7 @@ distribution:
   category: "general"
 """
 
-    (skill_dir / "ability.yaml").write_text(ability_yaml_content)
+    (skill_dir / "sutras.yaml").write_text(sutras_yaml_content)
 
     # Create examples.md
     examples_md_content = f"""# {name.replace("-", " ").title()} - Examples
@@ -224,8 +224,8 @@ Description of advanced usage scenario.
     click.echo(f"Created new skill at {skill_dir}")
     click.echo("\nNext steps:")
     click.echo(f"  1. Edit {skill_dir / 'SKILL.md'} to define your skill")
-    click.echo(f"  2. Update {skill_dir / 'ability.yaml'} with metadata")
-    click.echo(f"  3. Run: ability info {name}")
+    click.echo(f"  2. Update {skill_dir / 'sutras.yaml'} with metadata")
+    click.echo(f"  3. Run: sutras info {name}")
     click.echo("  4. Test your skill with Claude")
 
 
@@ -260,14 +260,14 @@ def validate(name: str) -> None:
 
         click.echo(f"✓ Valid description ({len(skill.description)} chars)")
 
-        # Check ability.yaml if present
+        # Check sutras.yaml if present
         if skill.abi:
-            click.echo("✓ ability.yaml found and parsed")
+            click.echo("✓ sutras.yaml found and parsed")
 
             if not skill.abi.version:
-                click.echo("⚠ Missing version in ability.yaml")
+                click.echo("⚠ Missing version in sutras.yaml")
         else:
-            click.echo("⚠ No ability.yaml found (recommended for lifecycle management)")
+            click.echo("⚠ No sutras.yaml found (recommended for lifecycle management)")
 
         click.echo(f"\n✓ Skill '{skill.name}' is valid!")
 

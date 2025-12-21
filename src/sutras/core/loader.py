@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from ability.core.skill import Skill
+from sutras.core.skill import Skill
 
 
 class SkillLoader:

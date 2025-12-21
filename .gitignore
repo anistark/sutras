@@ -107,7 +107,7 @@ venv.bak/
 # uv
 # Note: uv.lock should be committed to ensure reproducible builds
 
-# User skills directory (skills created with ability new)
+# User skills directory (skills created with sutras new)
 .claude/
 
 # Project

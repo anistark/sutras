@@ -1,10 +1,10 @@
-# Ability
+# Sutras
 
 **Devtool for creating, testing, and distributing Anthropic Agent Skills with lifecycle management.**
 
-## What is Ability?
+## What is Sutras?
 
-**Ability** is a comprehensive CLI and library built on top of the [Anthropic Agent Skills framework](https://platform.claude.com/docs/en/agent-sdk/skills). It provides tooling for the complete skill lifecycle — from scaffolding to distribution — with a standardized Skill ABI (Application Binary Interface) for testing, evaluation, and metadata management.
+**Sutras** is a comprehensive CLI and library built on top of the [Anthropic Agent Skills framework](https://platform.claude.com/docs/en/agent-sdk/skills). It provides tooling for the complete skill lifecycle — from scaffolding to distribution — with a standardized Skill ABI (Application Binary Interface) for testing, evaluation, and metadata management.
 
 ### Key Features
 
@@ -15,7 +15,7 @@
 - **Discover**: Browse, search, and import skills from local and remote registries
 - **Import**: Easy integration of skills into agent systems
 
-## Why Ability?
+## Why Sutras?
 
 Working with Anthropic Skills manually involves:
 - Creating SKILL.md files with proper YAML frontmatter
@@ -24,20 +24,20 @@ Working with Anthropic Skills manually involves:
 - Sharing skills with teams
 - Ensuring skill quality and consistency
 
-Ability automates all of this with a unified devtool experience.
+Sutras automates all of this with a unified devtool experience.
 
 ## Installation
 
 Using pip:
 
 ```sh
-pip install ability
+pip install sutras
 ```
 
 Or using uv (recommended):
 
 ```sh
-uv pip install ability
+uv pip install sutras
 ```
 
 ## Quick Start
@@ -47,7 +47,7 @@ uv pip install ability
 Use the CLI to scaffold a new skill:
 
 ```sh
-ability new pdf-form-filler --description "Fill PDF forms automatically"
+sutras new pdf-form-filler --description "Fill PDF forms automatically"
 ```
 
 This creates a skill with proper Anthropic Skills structure:
@@ -55,7 +55,7 @@ This creates a skill with proper Anthropic Skills structure:
 ```
 .claude/skills/pdf-form-filler/
 ├── SKILL.md           # Main skill definition with YAML frontmatter
-├── ability.yaml       # Ability ABI metadata (eval, tests, distribution)
+├── sutras.yaml        # Sutras ABI metadata (eval, tests, distribution)
 └── examples.md        # Usage examples
 ```
 
@@ -106,45 +106,45 @@ async for message in query(
 
 ```sh
 # Scaffold new skill
-ability new <name> [--description DESC] [--author AUTHOR]
+sutras new <name> [--description DESC] [--author AUTHOR]
 
 # List available skills
-ability list [--local | --global]
+sutras list [--local | --global]
 
 # Show skill information
-ability info <name>
+sutras info <name>
 
 # Validate skill structure
-ability validate <name>
+sutras validate <name>
 
 # Test skill (coming soon)
-ability test <name> [--input ...]
+sutras test <name> [--input ...]
 
 # Evaluate skill (coming soon)
-ability eval <name> [--framework ragas]
+sutras eval <name> [--framework ragas]
 
 # Build skill package (coming soon)
-ability build <name>
+sutras build <name>
 
 # Publish to registry (coming soon)
-ability publish <name>
+sutras publish <name>
 
 # Discover skills (coming soon)
-ability discover [--search QUERY]
+sutras discover [--search QUERY]
 ```
 
 ## Core Concepts
 
 ### Skill Structure
 
-Every Ability-managed skill consists of:
+Every Sutras-managed skill consists of:
 
 1. **SKILL.md** - Anthropic Skills format with YAML frontmatter (required)
    - `name`: Skill identifier (lowercase, hyphens)
    - `description`: What it does and when to use it (critical for Claude discovery)
    - `allowed-tools`: Optional tool restrictions
 
-2. **ability.yaml** - Ability ABI metadata (optional but recommended)
+2. **sutras.yaml** - Sutras ABI metadata (optional but recommended)
    - `version`: Semantic version
    - `author`: Skill author
    - `license`: Distribution license
@@ -158,9 +158,9 @@ Every Ability-managed skill consists of:
    - `scripts/`: Utility scripts
    - `templates/`: Reusable templates
 
-### Skill ABI (ability.yaml)
+### Skill ABI (sutras.yaml)
 
-The `ability.yaml` file extends Anthropic Skills with lifecycle metadata:
+The `sutras.yaml` file extends Anthropic Skills with lifecycle metadata:
 
 ```yaml
 version: "1.0.0"
@@ -198,20 +198,20 @@ distribution:
 
 ### Skill Lifecycle
 
-Ability supports the complete skill lifecycle:
+Sutras supports the complete skill lifecycle:
 
-1. **Create**: `ability new` scaffolds with templates
+1. **Create**: `sutras new` scaffolds with templates
 2. **Develop**: Edit SKILL.md and supporting files
-3. **Validate**: `ability validate` checks ABI compliance
-4. **Test**: `ability test` runs unit tests (coming soon)
-5. **Evaluate**: `ability eval` measures quality (coming soon)
-6. **Build**: `ability build` packages for distribution (coming soon)
-7. **Publish**: `ability publish` shares to registry (coming soon)
-8. **Discover**: `ability discover` finds published skills (coming soon)
+3. **Validate**: `sutras validate` checks ABI compliance
+4. **Test**: `sutras test` runs unit tests (coming soon)
+5. **Evaluate**: `sutras eval` measures quality (coming soon)
+6. **Build**: `sutras build` packages for distribution (coming soon)
+7. **Publish**: `sutras publish` shares to registry (coming soon)
+8. **Discover**: `sutras discover` finds published skills (coming soon)
 
 ### Skills Directory
 
-When you create skills with `ability new`, they're placed in:
+When you create skills with `sutras new`, they're placed in:
 - **Project skills**: `.claude/skills/` (shared with team via git)
 - **Global skills**: `~/.claude/skills/` (personal, not committed)
 
@@ -219,10 +219,10 @@ These follow the Anthropic Skills directory convention.
 
 ## Library Usage
 
-Use Ability as a library to integrate skill management into your applications:
+Use Sutras as a library to integrate skill management into your applications:
 
 ```python
-from ability import SkillLoader
+from sutras import SkillLoader
 
 # Load and inspect skills
 loader = SkillLoader()
