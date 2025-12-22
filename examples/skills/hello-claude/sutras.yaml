@@ -1,7 +1,7 @@
 version: "1.0.0"
-author: "Ability Team"
+author: "Sutras Team"
 license: "MIT"
-repository: "https://github.com/anistark/ability"
+repository: "https://github.com/anistark/sutras"
 
 # Capability declarations
 capabilities:
@@ -14,5 +14,5 @@ distribution:
   tags: ["example", "demo", "greeting", "hello-world"]
   category: "examples"
   keywords: ["hello", "greeting", "demo", "tutorial"]
-  homepage: "https://github.com/anistark/ability"
-  documentation: "https://github.com/anistark/ability#readme"
+  homepage: "https://github.com/anistark/sutras"
+  documentation: "https://github.com/anistark/sutras#readme"
