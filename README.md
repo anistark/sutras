@@ -1,40 +1,33 @@
 # Sutras
 
-**Devtool for creating, testing, and distributing Anthropic Agent Skills with lifecycle management.**
+**Devtool for Anthropic Agent Skills with lifecycle management.**
 
-## What is Sutras?
+Sutras is a CLI tool and library for creating, validating, and managing [Anthropic Agent Skills](https://platform.claude.com/docs/en/agent-sdk/skills). It provides scaffolding, validation, and a standardized Skill ABI for better skill organization and quality.
 
-**Sutras** is a comprehensive CLI and library built on top of the [Anthropic Agent Skills framework](https://platform.claude.com/docs/en/agent-sdk/skills). It provides tooling for the complete skill lifecycle — from scaffolding to distribution — with a standardized Skill ABI (Application Binary Interface) for testing, evaluation, and metadata management.
+## Key Features
 
-### Key Features
-
-- **Create**: Scaffold new skills with best-practice templates and Skill ABI compliance
-- **Evaluate**: Test skills with eval frameworks (Ragas, custom evaluators)
-- **Test**: Run skills in isolation with mock inputs and validate outputs
-- **Distribute**: Package and share skills as reusable modules
-- **Discover**: Browse, search, and import skills from local and remote registries
-- **Import**: Easy integration of skills into agent systems
+- **Scaffold**: Generate skills with proper structure and best-practice templates
+- **Validate**: Check skill format, metadata, and quality standards
+- **Discover**: List and inspect available skills in your workspace
+- **Manage**: Organize skills with versioning and metadata
 
 ## Why Sutras?
 
-Working with Anthropic Skills manually involves:
-- Creating SKILL.md files with proper YAML frontmatter
-- Managing skill metadata and descriptions
-- Testing skills across different scenarios
-- Sharing skills with teams
-- Ensuring skill quality and consistency
+Creating Anthropic Skills manually requires:
+- Writing SKILL.md files with correct YAML frontmatter
+- Managing metadata and descriptions
+- Ensuring consistent structure
+- Validating format and quality
 
-Sutras automates all of this with a unified devtool experience.
+Sutras automates this with simple CLI commands.
 
 ## Installation
-
-Using pip:
 
 ```sh
 pip install sutras
 ```
 
-Or using uv (recommended):
+Or with uv:
 
 ```sh
 uv pip install sutras
@@ -42,217 +35,134 @@ uv pip install sutras
 
 ## Quick Start
 
-### Creating a New Skill
-
-Use the CLI to scaffold a new skill:
+### Create a New Skill
 
 ```sh
-sutras new pdf-form-filler --description "Fill PDF forms automatically"
+sutras new my-skill --description "What this skill does and when to use it"
 ```
 
-This creates a skill with proper Anthropic Skills structure:
-
-```
-.claude/skills/pdf-form-filler/
-├── SKILL.md           # Main skill definition with YAML frontmatter
-├── sutras.yaml        # Sutras ABI metadata (eval, tests, distribution)
+This creates:
+```sh
+.claude/skills/my-skill/
+├── SKILL.md           # Skill definition with YAML frontmatter
+├── sutras.yaml        # Metadata (version, author, tests, etc.)
 └── examples.md        # Usage examples
 ```
 
-### Skill Structure (SKILL.md)
-
-```yaml
----
-name: pdf-form-filler
-description: Fill PDF forms automatically. Use when user needs to populate PDF forms with data from JSON, CSV, or manual input.
-allowed-tools: Read, Write, Bash
----
-
-# PDF Form Filler
-
-This skill helps fill PDF forms programmatically.
-
-## Instructions
-
-1. Read the PDF form to identify fields
-2. Map input data to form fields
-3. Fill the form using appropriate tools
-4. Save the completed PDF
-
-## Examples
-
-[See examples.md](examples.md) for detailed use cases.
-```
-
-### Using Skills with Claude
-
-Skills are automatically discovered by Claude when using the Agent SDK:
-
-```python
-from claude_agent_sdk import query, ClaudeAgentOptions
-
-async for message in query(
-    prompt="Fill out form.pdf with data from data.json",
-    options=ClaudeAgentOptions(
-        cwd=".claude/skills",
-        setting_sources=["project"],
-        allowed_tools=["Skill", "Read", "Write", "Bash"]
-    )
-):
-    print(message)
-```
-
-### CLI Commands
+### List Skills
 
 ```sh
-# Scaffold new skill
-sutras new <name> [--description DESC] [--author AUTHOR]
-
-# List available skills
-sutras list [--local | --global]
-
-# Show skill information
-sutras info <name>
-
-# Validate skill structure
-sutras validate <name>
-
-# Test skill (coming soon)
-sutras test <name> [--input ...]
-
-# Evaluate skill (coming soon)
-sutras eval <name> [--framework ragas]
-
-# Build skill package (coming soon)
-sutras build <name>
-
-# Publish to registry (coming soon)
-sutras publish <name>
-
-# Discover skills (coming soon)
-sutras discover [--search QUERY]
+sutras list
 ```
 
-## Core Concepts
+### View Skill Details
 
-### Skill Structure
+```sh
+sutras info my-skill
+```
 
-Every Sutras-managed skill consists of:
+### Validate a Skill
 
-1. **SKILL.md** - Anthropic Skills format with YAML frontmatter (required)
-   - `name`: Skill identifier (lowercase, hyphens)
-   - `description`: What it does and when to use it (critical for Claude discovery)
-   - `allowed-tools`: Optional tool restrictions
+```sh
+sutras validate my-skill
 
-2. **sutras.yaml** - Sutras ABI metadata (optional but recommended)
-   - `version`: Semantic version
-   - `author`: Skill author
-   - `license`: Distribution license
-   - `repository`: Source repository
-   - `tests`: Test specifications
-   - `eval`: Evaluation configuration
+# Strict mode (warnings become errors)
+sutras validate my-skill --strict
+```
 
-3. **Supporting files** (optional)
-   - `examples.md`: Usage examples
-   - `reference.md`: Detailed documentation
-   - `scripts/`: Utility scripts
-   - `templates/`: Reusable templates
+## CLI Reference
 
-### Skill ABI (sutras.yaml)
+```sh
+# Create a new skill
+sutras new <name> [--description TEXT] [--author TEXT] [--global]
 
-The `sutras.yaml` file extends Anthropic Skills with lifecycle metadata:
+# List skills
+sutras list [--local/--no-local] [--global/--no-global]
 
+# Show skill details
+sutras info <name>
+
+# Validate skill
+sutras validate <name> [--strict]
+```
+
+### Coming Soon
+- `sutras test` - Run skill tests
+- `sutras eval` - Evaluate with metrics
+- `sutras build` - Package for distribution
+- `sutras publish` - Share to registry
+
+## Skill Structure
+
+Every skill contains:
+
+### SKILL.md (required)
+Standard Anthropic Skills format with YAML frontmatter:
+```yaml
+---
+name: my-skill
+description: What it does and when Claude should use it
+allowed-tools: Read, Write  # Optional
+---
+
+# My Skill
+
+Instructions for Claude on how to use this skill...
+```
+
+### sutras.yaml (recommended)
+Extended metadata for lifecycle management:
 ```yaml
 version: "1.0.0"
 author: "Your Name"
 license: "MIT"
-repository: "https://github.com/user/skill"
 
-# Capability declarations
 capabilities:
-  tools: [Read, Write, Bash]
-  dependencies: []
-  constraints: {}
+  tools: [Read, Write]
 
-# Test configuration (optional)
-tests:
-  cases:
-    - name: "basic-fill-test"
-      inputs:
-        form: "tests/fixtures/form.pdf"
-        data: "tests/fixtures/data.json"
-      expected:
-        output_file: "tests/fixtures/expected.pdf"
-
-# Evaluation configuration (optional)
-eval:
-  framework: "ragas"
-  metrics: ["correctness", "completeness"]
-  dataset: "tests/eval/dataset.json"
-
-# Distribution metadata
 distribution:
-  tags: ["pdf", "forms", "automation"]
+  tags: ["automation", "pdf"]
   category: "document-processing"
 ```
 
-### Skill Lifecycle
+### Supporting Files (optional)
+- `examples.md` - Usage examples
+- Additional resources as needed
 
-Sutras supports the complete skill lifecycle:
+## Skill Locations
 
-1. **Create**: `sutras new` scaffolds with templates
-2. **Develop**: Edit SKILL.md and supporting files
-3. **Validate**: `sutras validate` checks ABI compliance
-4. **Test**: `sutras test` runs unit tests (coming soon)
-5. **Evaluate**: `sutras eval` measures quality (coming soon)
-6. **Build**: `sutras build` packages for distribution (coming soon)
-7. **Publish**: `sutras publish` shares to registry (coming soon)
-8. **Discover**: `sutras discover` finds published skills (coming soon)
+Skills are stored in:
+- **Project**: `.claude/skills/` (shared via git)
+- **Global**: `~/.claude/skills/` (personal only)
 
-### Skills Directory
-
-When you create skills with `sutras new`, they're placed in:
-- **Project skills**: `.claude/skills/` (shared with team via git)
-- **Global skills**: `~/.claude/skills/` (personal, not committed)
-
-These follow the Anthropic Skills directory convention.
+Use `--global` flag with `sutras new` to create global skills.
 
 ## Library Usage
-
-Use Sutras as a library to integrate skill management into your applications:
 
 ```python
 from sutras import SkillLoader
 
-# Load and inspect skills
 loader = SkillLoader()
-skills = loader.discover()            # Find available skills
-skill = loader.load("pdf-processor")  # Load specific skill
+skills = loader.discover()           # Find all skills
+skill = loader.load("my-skill")      # Load specific skill
 
-print(f"Skill: {skill.name}")
-print(f"Description: {skill.description}")
-print(f"Allowed tools: {skill.allowed_tools}")
-print(f"Path: {skill.path}")
+print(skill.name)
+print(skill.description)
+print(skill.version)
 ```
 
 ## Examples
 
-Check out the [examples/](./examples/) directory for sample skills demonstrating best practices.
+See [examples/skills/](./examples/skills/) for sample skills demonstrating best practices.
 
 ## Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup, guidelines, and workflow.
-
-Quick development commands (requires [just](https://github.com/casey/just)):
-
-```sh
-just format     # Format code
-just lint       # Lint code
-just check      # Type check
-just test       # Run tests
-just pre-commit # Run all checks
-```
+Contributions welcome! See [CONTRIBUTING.md](./CONTRIBUTING.md) for:
+- Development setup
+- Code style guidelines
+- Testing requirements
+- PR process
 
 ## License
 
-MIT License - see [LICENSE](./LICENSE) for details.
+MIT License - see [LICENSE](./LICENSE)
