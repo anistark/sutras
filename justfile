@@ -58,12 +58,12 @@ run-with *ARGS:
 install:
     uv sync
 
-# Publish to PyPI (requires credentials)
+# Publish to PyPI (requires credentials in ~/.pypirc)
 publish: clean build
     @echo "🔨 Building package..."
     uv build --sdist --wheel
     @echo "📦 Publishing to PyPI..."
-    uv publish
+    uv publish --token "$(grep -A2 '\[pypi\]' ~/.pypirc | grep password | cut -d'=' -f2- | xargs)"
 
 # Publish to Test PyPI
 publish-test: clean build
