@@ -6,6 +6,13 @@
 
 Sutras is a CLI tool and library for creating, validating, and managing [Anthropic Agent Skills](https://platform.claude.com/docs/en/agent-sdk/skills). It provides scaffolding, validation, and a standardized Skill ABI for better skill organization and quality.
 
+[![PyPI - Version](https://img.shields.io/pypi/v/sutras)](https://pypi.org/project/sutras/)
+[![PyPI Downloads](https://static.pepy.tech/badge/sutras/month)](https://pypi.org/project/sutras/)
+![PyPI - Status](https://img.shields.io/pypi/status/sutras)
+[![Open Source](https://img.shields.io/badge/open-source-brightgreen)](https://github.com/anistark/sutras)
+![maintenance-status](https://img.shields.io/badge/maintenance-actively--developed-brightgreen.svg)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+
 ## Key Features
 
 - **Scaffold**: Generate skills with proper structure and best-practice templates
