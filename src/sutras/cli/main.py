@@ -5,6 +5,7 @@ from pathlib import Path
 import click
 
 from sutras import SkillLoader, __version__
+from sutras.core.test_runner import TestRunner
 
 
 @click.group()
@@ -281,6 +282,129 @@ Description of advanced usage scenario.
     click.echo(f"  3. Run: {click.style(f'sutras info {name}', fg='green')}")
     click.echo(f"  4. Validate: {click.style(f'sutras validate {name}', fg='green')}")
     click.echo(f"  5. Test your skill with Claude")
+
+
+@cli.command()
+@click.argument("name")
+@click.option(
+    "--verbose",
+    "-v",
+    is_flag=True,
+    help="Enable verbose test output",
+)
+@click.option(
+    "--fail-fast",
+    "-x",
+    is_flag=True,
+    help="Stop on first test failure",
+)
+def test(name: str, verbose: bool, fail_fast: bool) -> None:
+    """Run tests for a skill."""
+    loader = SkillLoader()
+
+    try:
+        click.echo(click.style(f"Running tests for: {name}", fg="cyan", bold=True))
+        click.echo()
+
+        skill = loader.load(name)
+
+        if not skill.abi or not skill.abi.tests or not skill.abi.tests.cases:
+            click.echo(click.style("⚠ No tests found", fg="yellow"))
+            click.echo()
+            click.echo("Add tests to sutras.yaml:")
+            click.echo(click.style("""
+tests:
+  cases:
+    - name: "basic-test"
+      inputs:
+        example: "value"
+      expected:
+        status: "success"
+""", fg="bright_black"))
+            return
+
+        runner = TestRunner(skill)
+
+        if verbose:
+            click.echo(click.style(f"Test configuration:", fg="blue"))
+            click.echo(f"  Fixtures dir: {skill.abi.tests.fixtures_dir or 'none'}")
+            click.echo(f"  Test cases: {len(skill.abi.tests.cases)}")
+            if skill.abi.tests.coverage_threshold:
+                click.echo(f"  Coverage threshold: {skill.abi.tests.coverage_threshold}%")
+            click.echo()
+
+        summary = runner.run(verbose=verbose)
+
+        if not summary.results:
+            click.echo(click.style("⚠ No test results", fg="yellow"))
+            return
+
+        for result in summary.results:
+            if result.passed:
+                click.echo(click.style("✓", fg="green") + f" {result.name}")
+                if verbose and result.message:
+                    click.echo(click.style(f"    {result.message}", fg="bright_black"))
+            else:
+                click.echo(click.style("✗", fg="red") + f" {result.name}")
+                if result.message:
+                    click.echo(click.style(f"    {result.message}", fg="red"))
+                if verbose:
+                    if result.expected:
+                        click.echo(click.style(f"    Expected: {result.expected}", fg="yellow"))
+                    if result.actual:
+                        click.echo(click.style(f"    Actual: {result.actual}", fg="yellow"))
+
+            if fail_fast and not result.passed:
+                click.echo()
+                click.echo(click.style("Stopping on first failure (--fail-fast)", fg="yellow"))
+                break
+
+        click.echo()
+        click.echo(click.style("─" * 60, fg="blue"))
+
+        if summary.success:
+            click.echo(
+                click.style("✓ ", fg="green", bold=True) +
+                click.style(f"{summary.passed}/{summary.total} tests passed", fg="green")
+            )
+        else:
+            click.echo(
+                click.style("✗ ", fg="red", bold=True) +
+                click.style(
+                    f"{summary.failed}/{summary.total} tests failed",
+                    fg="red"
+                )
+            )
+
+        if skill.abi.tests.coverage_threshold and summary.total > 0:
+            pass_rate = (summary.passed / summary.total) * 100
+            threshold = skill.abi.tests.coverage_threshold
+            if pass_rate >= threshold:
+                click.echo(
+                    click.style(
+                        f"✓ Coverage threshold met: {pass_rate:.1f}% >= {threshold}%",
+                        fg="green"
+                    )
+                )
+            else:
+                click.echo(
+                    click.style(
+                        f"✗ Coverage threshold not met: {pass_rate:.1f}% < {threshold}%",
+                        fg="red"
+                    )
+                )
+
+        if not summary.success:
+            raise click.Abort()
+
+    except FileNotFoundError as e:
+        click.echo(click.style("✗ ", fg="red") + f"Skill not found: {name}", err=True)
+        click.echo(click.style(f"  {str(e)}", fg="yellow"), err=True)
+        click.echo("\nRun 'sutras list' to see available skills")
+        raise click.Abort()
+    except Exception as e:
+        click.echo(click.style("✗ ", fg="red") + f"Error running tests: {str(e)}", err=True)
+        raise click.Abort()
 
 
 @cli.command()
