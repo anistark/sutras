@@ -1,10 +1,12 @@
 """Main CLI entry point for sutras - skill devtool."""
 
+from datetime import datetime
 from pathlib import Path
 
 import click
 
 from sutras import SkillLoader, __version__
+from sutras.core.evaluator import Evaluator
 from sutras.core.test_runner import TestRunner
 
 
@@ -404,6 +406,175 @@ tests:
         raise click.Abort()
     except Exception as e:
         click.echo(click.style("✗ ", fg="red") + f"Error running tests: {str(e)}", err=True)
+        raise click.Abort()
+
+
+@cli.command()
+@click.argument("name")
+@click.option(
+    "--verbose",
+    "-v",
+    is_flag=True,
+    help="Enable verbose evaluation output",
+)
+@click.option(
+    "--no-history",
+    is_flag=True,
+    help="Don't save evaluation results to history",
+)
+@click.option(
+    "--show-history",
+    is_flag=True,
+    help="Show evaluation history for this skill",
+)
+def eval(name: str, verbose: bool, no_history: bool, show_history: bool) -> None:
+    """Evaluate a skill using configured metrics."""
+    loader = SkillLoader()
+
+    try:
+        skill = loader.load(name)
+
+        if show_history:
+            evaluator = Evaluator(skill)
+            history_files = evaluator.history.list(skill_name=name)
+
+            if not history_files:
+                click.echo(click.style("No evaluation history found", fg="yellow"))
+                return
+
+            click.echo(click.style(f"Evaluation history for: {name}", fg="cyan", bold=True))
+            click.echo()
+
+            for filepath in history_files[:10]:
+                history_data = evaluator.history.load(filepath)
+                timestamp = datetime.fromisoformat(history_data["timestamp"]).strftime("%Y-%m-%d %H:%M:%S")
+                passed = history_data["passed"]
+                total = history_data["total"]
+                status = click.style("✓", fg="green") if passed == total else click.style("✗", fg="red")
+
+                click.echo(f"{status} {timestamp} - {passed}/{total} passed")
+
+                if verbose and history_data.get("metrics"):
+                    for metric_name, score in history_data["metrics"].items():
+                        click.echo(click.style(f"    {metric_name}: {score:.3f}", fg="bright_black"))
+
+            return
+
+        click.echo(click.style(f"Running evaluation for: {name}", fg="cyan", bold=True))
+        click.echo()
+
+        if not skill.abi or not skill.abi.eval:
+            click.echo(click.style("⚠ No evaluation configuration found", fg="yellow"))
+            click.echo()
+            click.echo("Add evaluation config to sutras.yaml:")
+            click.echo(click.style("""
+eval:
+  framework: "ragas"
+  metrics: ["faithfulness", "answer_relevancy"]
+  dataset: "tests/eval/dataset.json"
+  threshold: 0.7
+""", fg="bright_black"))
+            return
+
+        evaluator = Evaluator(skill)
+
+        if verbose:
+            click.echo(click.style("Evaluation configuration:", fg="blue"))
+            click.echo(f"  Framework: {skill.abi.eval.framework}")
+            click.echo(f"  Metrics: {', '.join(skill.abi.eval.metrics)}")
+            if skill.abi.eval.dataset:
+                click.echo(f"  Dataset: {skill.abi.eval.dataset}")
+            if skill.abi.eval.threshold:
+                click.echo(f"  Threshold: {skill.abi.eval.threshold}")
+            click.echo()
+
+        try:
+            summary = evaluator.run(save_history=not no_history)
+        except ImportError as e:
+            click.echo(click.style("✗ ", fg="red") + str(e), err=True)
+            click.echo()
+            click.echo("Install evaluation dependencies:")
+            click.echo(click.style("  pip install ragas", fg="cyan"))
+            raise click.Abort()
+
+        if not summary.results:
+            click.echo(click.style("⚠ No evaluation results", fg="yellow"))
+            return
+
+        for result in summary.results:
+            if result.passed:
+                click.echo(click.style("✓", fg="green") + f" {result.name}")
+            else:
+                click.echo(click.style("✗", fg="red") + f" {result.name}")
+
+            if verbose or not result.passed:
+                for metric_name, score in result.metrics.items():
+                    color = "green" if score >= 0.7 else "yellow" if score >= 0.5 else "red"
+                    click.echo(click.style(f"    {metric_name}: {score:.3f}", fg=color))
+
+                if result.message and not result.passed:
+                    click.echo(click.style(f"    {result.message}", fg="red"))
+
+        click.echo()
+        click.echo(click.style("─" * 60, fg="blue"))
+
+        click.echo(click.style("Average Metrics:", fg="cyan", bold=True))
+        for metric_name, score in summary.metrics.items():
+            color = "green" if score >= 0.7 else "yellow" if score >= 0.5 else "red"
+            click.echo(click.style(f"  {metric_name}: {score:.3f}", fg=color))
+
+        click.echo()
+
+        if summary.success:
+            click.echo(
+                click.style("✓ ", fg="green", bold=True) +
+                click.style(f"{summary.passed}/{summary.total} cases passed", fg="green")
+            )
+        else:
+            click.echo(
+                click.style("✗ ", fg="red", bold=True) +
+                click.style(
+                    f"{summary.failed}/{summary.total} cases failed",
+                    fg="red"
+                )
+            )
+
+        if skill.abi.eval.threshold:
+            avg_score = sum(summary.metrics.values()) / len(summary.metrics) if summary.metrics else 0.0
+            threshold = skill.abi.eval.threshold
+            if avg_score >= threshold:
+                click.echo(
+                    click.style(
+                        f"✓ Threshold met: {avg_score:.3f} >= {threshold}",
+                        fg="green"
+                    )
+                )
+            else:
+                click.echo(
+                    click.style(
+                        f"✗ Threshold not met: {avg_score:.3f} < {threshold}",
+                        fg="red"
+                    )
+                )
+
+        if not no_history:
+            click.echo()
+            click.echo(click.style("History saved to: ", fg="bright_black") +
+                      click.style(f"{skill.path}/.sutras/eval_history/", fg="cyan"))
+
+        if not summary.success:
+            raise click.Abort()
+
+    except FileNotFoundError as e:
+        click.echo(click.style("✗ ", fg="red") + f"Skill not found: {name}", err=True)
+        click.echo(click.style(f"  {str(e)}", fg="yellow"), err=True)
+        click.echo("\nRun 'sutras list' to see available skills")
+        raise click.Abort()
+    except ValueError as e:
+        click.echo(click.style("✗ ", fg="red") + f"Configuration error: {str(e)}", err=True)
+        raise click.Abort()
+    except Exception as e:
+        click.echo(click.style("✗ ", fg="red") + f"Error running evaluation: {str(e)}", err=True)
         raise click.Abort()
 
 
