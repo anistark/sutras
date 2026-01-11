@@ -116,6 +116,9 @@ uv run sutras new test-skill
 uv run sutras list
 uv run sutras info test-skill
 uv run sutras validate test-skill
+uv run sutras test test-skill
+uv run sutras eval test-skill
+uv run sutras build test-skill
 ```
 
 ### Building
@@ -237,6 +240,61 @@ def command(name: str, flag: bool) -> None:
 3. Export from `__init__.py` if public
 4. Add tests
 5. Update docs
+
+## Packaging Skills
+
+### Building Distribution Packages
+
+Skills can be packaged for distribution using `sutras build`:
+
+```sh
+sutras build my-skill            # Creates dist/my-skill-1.0.0.tar.gz
+sutras build my-skill -o ./pkg   # Custom output directory
+```
+
+### Package Requirements
+
+For a skill to be buildable, `sutras.yaml` must include:
+
+```yaml
+version: "1.0.0"      # Semantic versioning (required)
+author: "Your Name"   # Author name (required)
+license: "MIT"        # License identifier (required)
+```
+
+Version format must follow semver: `MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]`
+
+Examples:
+- `1.0.0` - Standard release
+- `1.0.0-beta` - Pre-release
+- `1.0.0+20240101` - With build metadata
+
+### Package Contents
+
+Built packages include:
+- `SKILL.md` - Skill definition
+- `sutras.yaml` - Metadata
+- Supporting files (`examples.md`, etc.)
+- `MANIFEST.json` - File checksums and package metadata
+
+### Testing Packaging
+
+When developing packaging features:
+
+```sh
+# Create test skill
+uv run sutras new test-pkg --author "Test" --description "Testing packaging"
+
+# Add version to sutras.yaml
+echo 'version: "0.1.0"' >> .claude/skills/test-pkg/sutras.yaml
+echo 'license: "MIT"' >> .claude/skills/test-pkg/sutras.yaml
+
+# Build package
+uv run sutras build test-pkg
+
+# Verify package
+tar -tzf dist/test-pkg-0.1.0.tar.gz
+```
 
 ## Questions?
 
