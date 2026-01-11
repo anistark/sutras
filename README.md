@@ -93,12 +93,42 @@ sutras info <name>
 
 # Validate skill
 sutras validate <name> [--strict]
+
+# Run tests
+sutras test <name> [--verbose] [--fail-fast]
+
+# Evaluate with metrics
+sutras eval <name> [--verbose] [--no-history] [--show-history]
+
+# Build distributable package
+sutras build <name> [--output PATH] [--no-validate]
 ```
 
+### Package and Distribute
+
+```sh
+# Build a distributable package
+sutras build my-skill
+
+# Build with custom output directory
+sutras build my-skill --output ./packages
+
+# Skip validation
+sutras build my-skill --no-validate
+```
+
+Creates a versioned tarball (e.g., `my-skill-1.0.0.tar.gz`) in `dist/` containing:
+- SKILL.md and sutras.yaml
+- Supporting files (examples.md, etc.)
+- MANIFEST.json with checksums and metadata
+
+**Requirements for distribution:**
+- Version (semver format) in sutras.yaml
+- Author in sutras.yaml
+- License in sutras.yaml
+- Valid skill name and description
+
 ### Coming Soon
-- `sutras test` - Run skill tests
-- `sutras eval` - Evaluate with metrics
-- `sutras build` - Package for distribution
 - `sutras publish` - Share to registry
 
 ## Skill Structure
