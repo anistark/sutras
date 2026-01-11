@@ -15,6 +15,7 @@ except PackageNotFoundError:
     __version__ = "0.0.0.dev0"
 
 from sutras.core.abi import SutrasABI
+from sutras.core.builder import BuildError, SkillBuilder
 from sutras.core.loader import SkillLoader
 from sutras.core.skill import Skill, SkillMetadata
 
@@ -23,5 +24,7 @@ __all__ = [
     "SkillMetadata",
     "SutrasABI",
     "SkillLoader",
+    "SkillBuilder",
+    "BuildError",
     "__version__",
 ]

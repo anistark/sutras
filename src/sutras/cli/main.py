@@ -6,6 +6,7 @@ from pathlib import Path
 import click
 
 from sutras import SkillLoader, __version__
+from sutras.core.builder import BuildError, SkillBuilder
 from sutras.core.evaluator import Evaluator
 from sutras.core.test_runner import TestRunner
 
@@ -674,6 +675,90 @@ def validate(name: str, strict: bool) -> None:
     except Exception as e:
         if "Validation failed" not in str(e):
             click.echo(click.style("✗ ", fg="red") + f"Error validating skill: {str(e)}", fg="red", err=True)
+        raise click.Abort()
+
+
+@cli.command()
+@click.argument("name")
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    help="Output directory for the package (default: ./dist)",
+)
+@click.option(
+    "--no-validate",
+    is_flag=True,
+    help="Skip validation before building",
+)
+def build(name: str, output: Path | None, no_validate: bool) -> None:
+    """Build a distributable package for a skill."""
+    loader = SkillLoader()
+
+    try:
+        click.echo(click.style(f"Building skill: {name}", fg="cyan", bold=True))
+        click.echo()
+
+        skill = loader.load(name)
+
+        builder = SkillBuilder(skill, output_dir=output)
+
+        if not no_validate:
+            click.echo(click.style("Validating skill...", fg="blue"))
+            errors = builder.validate_for_distribution()
+            if errors:
+                click.echo(click.style("✗ Validation failed:", fg="red", bold=True))
+                for error in errors:
+                    click.echo(click.style(f"  - {error}", fg="red"))
+                click.echo()
+                click.echo("Fix the errors and try again, or use --no-validate to skip validation")
+                raise click.Abort()
+            click.echo(click.style("✓ Validation passed", fg="green"))
+            click.echo()
+
+        click.echo(click.style("Packaging skill...", fg="blue"))
+
+        package_path = builder.build(validate=False)
+
+        package_size = package_path.stat().st_size
+        size_str = f"{package_size:,} bytes"
+        if package_size > 1024:
+            size_str = f"{package_size / 1024:.1f} KB"
+        if package_size > 1024 * 1024:
+            size_str = f"{package_size / (1024 * 1024):.1f} MB"
+
+        click.echo()
+        click.echo(click.style("✓ Build complete!", fg="green", bold=True))
+        click.echo()
+        click.echo(click.style("Package:", fg="cyan", bold=True))
+        click.echo(f"  {package_path}")
+        click.echo(click.style(f"  Size: {size_str}", fg="bright_black"))
+        click.echo()
+
+        version = skill.abi.version if skill.abi else "0.0.0"
+        click.echo(click.style("Package contents:", fg="cyan", bold=True))
+        click.echo(f"  Name: {skill.name}")
+        click.echo(f"  Version: {version}")
+        if skill.abi and skill.abi.author:
+            click.echo(f"  Author: {skill.abi.author}")
+        click.echo(f"  Files: {len(builder.create_manifest()['files']) + 1}")
+        click.echo()
+
+        click.echo(click.style("Next steps:", fg="yellow", bold=True))
+        click.echo("  - Test the package by extracting it")
+        click.echo("  - Share the package with others")
+        click.echo("  - Publish to a skill registry (coming soon)")
+
+    except FileNotFoundError as e:
+        click.echo(click.style("✗ ", fg="red") + f"Skill not found: {name}", err=True)
+        click.echo(click.style(f"  {str(e)}", fg="yellow"), err=True)
+        click.echo("\nRun 'sutras list' to see available skills")
+        raise click.Abort()
+    except BuildError as e:
+        click.echo(click.style("✗ Build failed: ", fg="red") + str(e), err=True)
+        raise click.Abort()
+    except Exception as e:
+        click.echo(click.style("✗ ", fg="red") + f"Error building skill: {str(e)}", err=True)
         raise click.Abort()
 
 
