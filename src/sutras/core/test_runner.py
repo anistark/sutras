@@ -93,11 +93,7 @@ class FixtureManager:
         if not self.fixtures_dir.exists():
             return []
 
-        return [
-            f.stem
-            for f in self.fixtures_dir.glob("*.json")
-            if f.is_file()
-        ]
+        return [f.stem for f in self.fixtures_dir.glob("*.json") if f.is_file()]
 
 
 class TestRunner:
@@ -240,11 +236,7 @@ class TestRunner:
                 resolved[key] = value
         return resolved
 
-    def _execute_test(
-        self,
-        inputs: dict[str, Any],
-        timeout: int | None
-    ) -> dict[str, Any]:
+    def _execute_test(self, inputs: dict[str, Any], timeout: int | None) -> dict[str, Any]:
         """Execute the test with given inputs.
 
         Args:
@@ -256,11 +248,7 @@ class TestRunner:
         """
         return {"status": "success", "data": inputs}
 
-    def _compare_outputs(
-        self,
-        actual: dict[str, Any],
-        expected: dict[str, Any]
-    ) -> bool:
+    def _compare_outputs(self, actual: dict[str, Any], expected: dict[str, Any]) -> bool:
         """Compare actual and expected outputs.
 
         Args:

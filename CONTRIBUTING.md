@@ -42,7 +42,15 @@ sutras/
 │   │   ├── __init__.py
 │   │   ├── skill.py        # Skill model (SKILL.md + sutras.yaml)
 │   │   ├── abi.py          # Skill ABI definitions
-│   │   └── loader.py       # Skill discovery and loading
+│   │   ├── loader.py       # Skill discovery and loading
+│   │   ├── builder.py      # Skill packaging
+│   │   ├── test_runner.py  # Test framework
+│   │   ├── evaluator.py    # Evaluation system
+│   │   ├── config.py       # Global configuration
+│   │   ├── naming.py       # Skill naming system
+│   │   ├── registry.py     # Registry management
+│   │   ├── installer.py    # Skill installation
+│   │   └── publisher.py    # Skill publishing
 │   └── cli/
 │       ├── __init__.py
 │       └── main.py         # CLI commands
@@ -119,6 +127,12 @@ uv run sutras validate test-skill
 uv run sutras test test-skill
 uv run sutras eval test-skill
 uv run sutras build test-skill
+
+# Registry commands
+uv run sutras registry list
+uv run sutras registry add test-registry https://github.com/user/registry
+uv run sutras install @username/skill-name
+uv run sutras publish
 ```
 
 ### Building
@@ -295,6 +309,161 @@ uv run sutras build test-pkg
 # Verify package
 tar -tzf dist/test-pkg-0.1.0.tar.gz
 ```
+
+## Registry System Development
+
+### Architecture
+
+The registry system uses a federated Git-based design:
+
+- **Configuration**: `~/.sutras/config.yaml` stores registry configurations
+- **Caching**: `~/.sutras/registry-cache/` holds cloned registry repos
+- **Installation**: `~/.claude/installed/` stores versioned skills
+- **Symlinks**: `~/.claude/skills/` provides active skill links
+
+### Core Components
+
+1. **Config** (`config.py`): Global configuration management
+2. **Naming** (`naming.py`): Skill name parsing with namespace support
+3. **Registry** (`registry.py`): Multi-registry management and index parsing
+4. **Installer** (`installer.py`): Download, verify, and install skills
+5. **Publisher** (`publisher.py`): Build and publish to registries
+
+### Testing Registry Features
+
+#### Setting Up a Test Registry
+
+```sh
+# Create a local test registry
+mkdir -p /tmp/test-registry/skills
+cd /tmp/test-registry
+
+# Initialize git repo
+git init
+git config user.name "Test User"
+git config user.email "test@example.com"
+
+# Create registry metadata
+cat > registry.yaml << EOF
+name: test-registry
+description: Test registry for development
+visibility: public
+EOF
+
+# Commit
+git add .
+git commit -m "Initial registry setup"
+```
+
+#### Creating a Test Skill for Publishing
+
+```sh
+# Create skill with scoped name (required for publishing)
+cd /tmp
+uv run sutras new @testuser/demo-skill --author "Test User" --description "Demo skill"
+
+# Update to use scoped name in SKILL.md
+cd .claude/skills/@testuser/demo-skill
+# Edit SKILL.md to change name: @testuser/demo-skill
+
+# Ensure sutras.yaml has required fields
+cat >> sutras.yaml << EOF
+version: "0.1.0"
+author: "Test User"
+license: "MIT"
+EOF
+
+# Build the package
+cd /tmp
+uv run sutras build .claude/skills/@testuser/demo-skill
+```
+
+#### Testing Registry Commands
+
+```sh
+# Add test registry
+uv run sutras registry add test-local file:///tmp/test-registry --default
+
+# List registries
+uv run sutras registry list
+
+# Build index for the registry
+uv run sutras registry build-index /tmp/test-registry
+
+# Update registry cache
+uv run sutras registry update test-local
+
+# Publish skill (requires skill to exist)
+cd .claude/skills/@testuser/demo-skill
+uv run sutras publish --registry test-local
+
+# Install skill
+uv run sutras install @testuser/demo-skill --registry test-local
+
+# List installed
+ls ~/.claude/installed/
+
+# Uninstall
+uv run sutras uninstall @testuser/demo-skill
+
+# Remove registry
+uv run sutras registry remove test-local
+```
+
+#### Testing with Remote Git Registry
+
+```sh
+# Create a test repo on GitHub/GitLab
+# Then add it as a registry
+uv run sutras registry add remote-test https://github.com/username/test-registry
+
+# Update to fetch the index
+uv run sutras registry update remote-test
+
+# Install from remote
+uv run sutras install @namespace/skill-name --registry remote-test
+```
+
+### Naming Conventions
+
+- **Scoped names**: Required for registry publishing: `@namespace/skill-name`
+- **Bare names**: Only for local development: `skill-name`
+- **Namespace**: Must match Git username/org in registry configuration
+- **Validation**: Uses regex `^[a-zA-Z0-9_-]+$` for both namespace and name
+
+### Index Schema
+
+Registry `index.yaml` format:
+
+```yaml
+version: "1.0"
+skills:
+  "@username/skill-name":
+    name: "@username/skill-name"
+    version: "1.0.0"
+    description: "Skill description"
+    author: "Author Name"
+    tarball_url: "skills/@username/skill-name/skill-name-1.0.0.tar.gz"
+    checksum: "sha256-hash-here"
+    versions:
+      "1.0.0": "skills/@username/skill-name/skill-name-1.0.0.tar.gz"
+```
+
+### Common Development Tasks
+
+**Adding a new registry feature:**
+1. Update appropriate core module (`registry.py`, `installer.py`, etc.)
+2. Add CLI command in `main.py`
+3. Add tests
+4. Update documentation (README, CONTRIBUTING)
+5. Add changelog entry
+
+**Testing error handling:**
+- Missing registry
+- Invalid skill name format
+- Network failures (use local file:// repos)
+- Checksum mismatches
+- Missing required fields in sutras.yaml
 
 ## Questions?
 

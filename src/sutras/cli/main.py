@@ -7,7 +7,11 @@ import click
 
 from sutras import SkillLoader, __version__
 from sutras.core.builder import BuildError, SkillBuilder
+from sutras.core.config import SutrasConfig
 from sutras.core.evaluator import Evaluator
+from sutras.core.installer import SkillInstaller
+from sutras.core.publisher import PublishError, SkillPublisher
+from sutras.core.registry import RegistryManager
 from sutras.core.test_runner import TestRunner
 
 
@@ -52,7 +56,9 @@ def list(local: bool, global_: bool) -> None:
         for skill_name in skills:
             try:
                 skill = loader.load(skill_name)
-                version_str = f" {click.style(f'v{skill.version}', fg='blue')}" if skill.version else ""
+                version_str = (
+                    f" {click.style(f'v{skill.version}', fg='blue')}" if skill.version else ""
+                )
                 click.echo(f"  {click.style(skill.name, fg='cyan', bold=True)}{version_str}")
 
                 desc = skill.description
@@ -64,7 +70,9 @@ def list(local: bool, global_: bool) -> None:
                     click.echo(click.style(f"    {skill.path}", fg="bright_black"))
                 click.echo()
             except Exception as e:
-                click.echo(f"  {click.style(skill_name, fg='red')} {click.style('(failed to load)', fg='yellow')}")
+                failed_name = click.style(skill_name, fg="red")
+                failed_msg = click.style("(failed to load)", fg="yellow")
+                click.echo(f"  {failed_name} {failed_msg}")
                 click.echo(click.style(f"    Error: {str(e)}", fg="red"))
                 click.echo()
     except Exception as e:
@@ -171,7 +179,8 @@ def new(name: str, description: str | None, author: str | None, global_: bool) -
     """Create a new skill with proper structure."""
     if not name.replace("-", "").replace("_", "").isalnum():
         click.echo(
-            click.style("✗ ", fg="red") + "Skill name must contain only alphanumeric characters, hyphens, and underscores",
+            click.style("✗ ", fg="red")
+            + "Skill name must contain only alphanumeric characters, hyphens, and underscores",
             err=True,
         )
         raise click.Abort()
@@ -186,7 +195,9 @@ def new(name: str, description: str | None, author: str | None, global_: bool) -
     skill_dir = skills_dir / name
 
     if skill_dir.exists():
-        click.echo(click.style("✗ ", fg="red") + f"Skill '{name}' already exists at {skill_dir}", err=True)
+        click.echo(
+            click.style("✗ ", fg="red") + f"Skill '{name}' already exists at {skill_dir}", err=True
+        )
         raise click.Abort()
 
     click.echo(click.style(f"Creating skill: {name}", fg="cyan", bold=True))
@@ -276,7 +287,7 @@ Description of advanced usage scenario.
     click.echo(click.style("✓ ", fg="green") + "Created sutras.yaml")
     click.echo(click.style("✓ ", fg="green") + "Created examples.md")
     click.echo()
-    click.echo(click.style("✓ Success!", fg="green", bold=True) + f" Skill created at:")
+    click.echo(click.style("✓ Success!", fg="green", bold=True) + " Skill created at:")
     click.echo(click.style(f"  {skill_dir}", fg="cyan"))
     click.echo()
     click.echo(click.style("Next steps:", fg="yellow", bold=True))
@@ -284,7 +295,7 @@ Description of advanced usage scenario.
     click.echo(f"  2. Update {click.style('sutras.yaml', fg='cyan')} with metadata")
     click.echo(f"  3. Run: {click.style(f'sutras info {name}', fg='green')}")
     click.echo(f"  4. Validate: {click.style(f'sutras validate {name}', fg='green')}")
-    click.echo(f"  5. Test your skill with Claude")
+    click.echo("  5. Test your skill with Claude")
 
 
 @cli.command()
@@ -315,7 +326,9 @@ def test(name: str, verbose: bool, fail_fast: bool) -> None:
             click.echo(click.style("⚠ No tests found", fg="yellow"))
             click.echo()
             click.echo("Add tests to sutras.yaml:")
-            click.echo(click.style("""
+            click.echo(
+                click.style(
+                    """
 tests:
   cases:
     - name: "basic-test"
@@ -323,13 +336,16 @@ tests:
         example: "value"
       expected:
         status: "success"
-""", fg="bright_black"))
+""",
+                    fg="bright_black",
+                )
+            )
             return
 
         runner = TestRunner(skill)
 
         if verbose:
-            click.echo(click.style(f"Test configuration:", fg="blue"))
+            click.echo(click.style("Test configuration:", fg="blue"))
             click.echo(f"  Fixtures dir: {skill.abi.tests.fixtures_dir or 'none'}")
             click.echo(f"  Test cases: {len(skill.abi.tests.cases)}")
             if skill.abi.tests.coverage_threshold:
@@ -367,16 +383,13 @@ tests:
 
         if summary.success:
             click.echo(
-                click.style("✓ ", fg="green", bold=True) +
-                click.style(f"{summary.passed}/{summary.total} tests passed", fg="green")
+                click.style("✓ ", fg="green", bold=True)
+                + click.style(f"{summary.passed}/{summary.total} tests passed", fg="green")
             )
         else:
             click.echo(
-                click.style("✗ ", fg="red", bold=True) +
-                click.style(
-                    f"{summary.failed}/{summary.total} tests failed",
-                    fg="red"
-                )
+                click.style("✗ ", fg="red", bold=True)
+                + click.style(f"{summary.failed}/{summary.total} tests failed", fg="red")
             )
 
         if skill.abi.tests.coverage_threshold and summary.total > 0:
@@ -385,15 +398,13 @@ tests:
             if pass_rate >= threshold:
                 click.echo(
                     click.style(
-                        f"✓ Coverage threshold met: {pass_rate:.1f}% >= {threshold}%",
-                        fg="green"
+                        f"✓ Coverage threshold met: {pass_rate:.1f}% >= {threshold}%", fg="green"
                     )
                 )
             else:
                 click.echo(
                     click.style(
-                        f"✗ Coverage threshold not met: {pass_rate:.1f}% < {threshold}%",
-                        fg="red"
+                        f"✗ Coverage threshold not met: {pass_rate:.1f}% < {threshold}%", fg="red"
                     )
                 )
 
@@ -448,16 +459,22 @@ def eval(name: str, verbose: bool, no_history: bool, show_history: bool) -> None
 
             for filepath in history_files[:10]:
                 history_data = evaluator.history.load(filepath)
-                timestamp = datetime.fromisoformat(history_data["timestamp"]).strftime("%Y-%m-%d %H:%M:%S")
+                timestamp = datetime.fromisoformat(history_data["timestamp"]).strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                )
                 passed = history_data["passed"]
                 total = history_data["total"]
-                status = click.style("✓", fg="green") if passed == total else click.style("✗", fg="red")
+                status = (
+                    click.style("✓", fg="green") if passed == total else click.style("✗", fg="red")
+                )
 
                 click.echo(f"{status} {timestamp} - {passed}/{total} passed")
 
                 if verbose and history_data.get("metrics"):
                     for metric_name, score in history_data["metrics"].items():
-                        click.echo(click.style(f"    {metric_name}: {score:.3f}", fg="bright_black"))
+                        click.echo(
+                            click.style(f"    {metric_name}: {score:.3f}", fg="bright_black")
+                        )
 
             return
 
@@ -468,13 +485,18 @@ def eval(name: str, verbose: bool, no_history: bool, show_history: bool) -> None
             click.echo(click.style("⚠ No evaluation configuration found", fg="yellow"))
             click.echo()
             click.echo("Add evaluation config to sutras.yaml:")
-            click.echo(click.style("""
+            click.echo(
+                click.style(
+                    """
 eval:
   framework: "ragas"
   metrics: ["faithfulness", "answer_relevancy"]
   dataset: "tests/eval/dataset.json"
   threshold: 0.7
-""", fg="bright_black"))
+""",
+                    fg="bright_black",
+                )
+            )
             return
 
         evaluator = Evaluator(skill)
@@ -528,40 +550,35 @@ eval:
 
         if summary.success:
             click.echo(
-                click.style("✓ ", fg="green", bold=True) +
-                click.style(f"{summary.passed}/{summary.total} cases passed", fg="green")
+                click.style("✓ ", fg="green", bold=True)
+                + click.style(f"{summary.passed}/{summary.total} cases passed", fg="green")
             )
         else:
             click.echo(
-                click.style("✗ ", fg="red", bold=True) +
-                click.style(
-                    f"{summary.failed}/{summary.total} cases failed",
-                    fg="red"
-                )
+                click.style("✗ ", fg="red", bold=True)
+                + click.style(f"{summary.failed}/{summary.total} cases failed", fg="red")
             )
 
         if skill.abi.eval.threshold:
-            avg_score = sum(summary.metrics.values()) / len(summary.metrics) if summary.metrics else 0.0
+            avg_score = (
+                sum(summary.metrics.values()) / len(summary.metrics) if summary.metrics else 0.0
+            )
             threshold = skill.abi.eval.threshold
             if avg_score >= threshold:
                 click.echo(
-                    click.style(
-                        f"✓ Threshold met: {avg_score:.3f} >= {threshold}",
-                        fg="green"
-                    )
+                    click.style(f"✓ Threshold met: {avg_score:.3f} >= {threshold}", fg="green")
                 )
             else:
                 click.echo(
-                    click.style(
-                        f"✗ Threshold not met: {avg_score:.3f} < {threshold}",
-                        fg="red"
-                    )
+                    click.style(f"✗ Threshold not met: {avg_score:.3f} < {threshold}", fg="red")
                 )
 
         if not no_history:
             click.echo()
-            click.echo(click.style("History saved to: ", fg="bright_black") +
-                      click.style(f"{skill.path}/.sutras/eval_history/", fg="cyan"))
+            click.echo(
+                click.style("History saved to: ", fg="bright_black")
+                + click.style(f"{skill.path}/.sutras/eval_history/", fg="cyan")
+            )
 
         if not summary.success:
             raise click.Abort()
@@ -603,14 +620,18 @@ def validate(name: str, strict: bool) -> None:
         if not skill.name:
             errors.append("Missing skill name")
         else:
-            click.echo(click.style("✓", fg="green") + f" Valid name: {click.style(skill.name, fg='cyan')}")
+            click.echo(
+                click.style("✓", fg="green") + f" Valid name: {click.style(skill.name, fg='cyan')}"
+            )
 
         if not skill.description:
             errors.append("Missing skill description")
         else:
             desc_len = len(skill.description)
             if desc_len < 50:
-                warnings.append(f"Description is short ({desc_len} chars, recommend 50+ for Claude discovery)")
+                warnings.append(
+                    f"Description is short ({desc_len} chars, recommend 50+ for Claude discovery)"
+                )
             click.echo(click.style("✓", fg="green") + f" Valid description ({desc_len} chars)")
 
         if skill.abi:
@@ -619,7 +640,10 @@ def validate(name: str, strict: bool) -> None:
             if not skill.abi.version:
                 warnings.append("Missing version in sutras.yaml")
             else:
-                click.echo(click.style("✓", fg="green") + f" Version: {click.style(skill.abi.version, fg='blue')}")
+                click.echo(
+                    click.style("✓", fg="green")
+                    + f" Version: {click.style(skill.abi.version, fg='blue')}"
+                )
 
             if not skill.abi.author:
                 warnings.append("Missing author in sutras.yaml")
@@ -638,10 +662,15 @@ def validate(name: str, strict: bool) -> None:
             warnings.append("No sutras.yaml found (recommended for lifecycle management)")
 
         if skill.allowed_tools:
-            click.echo(click.style("✓", fg="green") + f" Allowed tools: {', '.join(skill.allowed_tools)}")
+            click.echo(
+                click.style("✓", fg="green") + f" Allowed tools: {', '.join(skill.allowed_tools)}"
+            )
 
         if skill.supporting_files:
-            click.echo(click.style("✓", fg="green") + f" {len(skill.supporting_files)} supporting file(s) found")
+            click.echo(
+                click.style("✓", fg="green")
+                + f" {len(skill.supporting_files)} supporting file(s) found"
+            )
 
         click.echo()
 
@@ -659,10 +688,19 @@ def validate(name: str, strict: bool) -> None:
             raise click.Abort()
 
         if strict and warnings:
-            click.echo(click.style("✗ Validation failed (strict mode: warnings treated as errors)", fg="red", bold=True))
+            click.echo(
+                click.style(
+                    "✗ Validation failed (strict mode: warnings treated as errors)",
+                    fg="red",
+                    bold=True,
+                )
+            )
             raise click.Abort()
 
-        click.echo(click.style("✓ ", fg="green", bold=True) + click.style(f"Skill '{skill.name}' is valid!", fg="green"))
+        click.echo(
+            click.style("✓ ", fg="green", bold=True)
+            + click.style(f"Skill '{skill.name}' is valid!", fg="green")
+        )
 
     except FileNotFoundError as e:
         click.echo(click.style("✗ ", fg="red") + f"Skill not found: {name}", err=True)
@@ -674,7 +712,10 @@ def validate(name: str, strict: bool) -> None:
         raise click.Abort()
     except Exception as e:
         if "Validation failed" not in str(e):
-            click.echo(click.style("✗ ", fg="red") + f"Error validating skill: {str(e)}", fg="red", err=True)
+            click.echo(
+                click.style("✗ ", fg="red") + f"Error validating skill: {str(e)}",
+                err=True,
+            )
         raise click.Abort()
 
 
@@ -759,6 +800,240 @@ def build(name: str, output: Path | None, no_validate: bool) -> None:
         raise click.Abort()
     except Exception as e:
         click.echo(click.style("✗ ", fg="red") + f"Error building skill: {str(e)}", err=True)
+        raise click.Abort()
+
+
+@cli.group()
+def registry() -> None:
+    """Manage skill registries."""
+    pass
+
+
+@registry.command("add")
+@click.argument("name")
+@click.argument("url")
+@click.option("--namespace", "-n", help="Default namespace for this registry")
+@click.option("--auth-token", "-t", help="Authentication token")
+@click.option("--priority", "-p", default=0, help="Registry priority (higher = checked first)")
+@click.option("--default", "set_default", is_flag=True, help="Set as default registry")
+def registry_add(
+    name: str,
+    url: str,
+    namespace: str | None,
+    auth_token: str | None,
+    priority: int,
+    set_default: bool,
+) -> None:
+    """Add a new registry."""
+    try:
+        config = SutrasConfig()
+        config.add_registry(name, url, namespace, auth_token, priority, set_default)
+
+        click.echo(
+            click.style("✓ ", fg="green") + f"Added registry: {click.style(name, fg='cyan')}"
+        )
+        click.echo(f"  URL: {url}")
+        if namespace:
+            click.echo(f"  Namespace: {namespace}")
+        if priority:
+            click.echo(f"  Priority: {priority}")
+        if set_default:
+            click.echo(click.style("  Set as default registry", fg="yellow"))
+
+    except Exception as e:
+        click.echo(click.style("✗ ", fg="red") + f"Failed to add registry: {str(e)}", err=True)
+        raise click.Abort()
+
+
+@registry.command("list")
+def registry_list() -> None:
+    """List configured registries."""
+    try:
+        config = SutrasConfig()
+        registries = config.list_registries()
+
+        if not registries:
+            click.echo(click.style("No registries configured", fg="yellow"))
+            click.echo("\nAdd a registry with:")
+            click.echo(click.style("  sutras registry add <name> <url>", fg="cyan", bold=True))
+            return
+
+        click.echo(
+            click.style(f"Configured registries ({len(registries)}):", fg="green", bold=True)
+        )
+        click.echo()
+
+        default = config.config.default_registry
+        for name, reg in sorted(registries.items(), key=lambda x: x[1].priority, reverse=True):
+            is_default = name == default
+            prefix = click.style("★ ", fg="yellow") if is_default else "  "
+            click.echo(f"{prefix}{click.style(name, fg='cyan', bold=True)}")
+            click.echo(f"    URL: {reg.url}")
+            if reg.namespace:
+                click.echo(f"    Namespace: {reg.namespace}")
+            if reg.priority:
+                click.echo(f"    Priority: {reg.priority}")
+            status = (
+                click.style("enabled", fg="green")
+                if reg.enabled
+                else click.style("disabled", fg="red")
+            )
+            click.echo(f"    Status: {status}")
+            if is_default:
+                click.echo(click.style("    (default)", fg="yellow"))
+            click.echo()
+
+    except Exception as e:
+        click.echo(click.style("✗ ", fg="red") + f"Failed to list registries: {str(e)}", err=True)
+        raise click.Abort()
+
+
+@registry.command("remove")
+@click.argument("name")
+def registry_remove(name: str) -> None:
+    """Remove a registry."""
+    try:
+        config = SutrasConfig()
+        config.remove_registry(name)
+
+        click.echo(click.style("✓ ", fg="green") + f"Removed registry: {name}")
+
+    except ValueError as e:
+        click.echo(click.style("✗ ", fg="red") + str(e), err=True)
+        raise click.Abort()
+    except Exception as e:
+        click.echo(click.style("✗ ", fg="red") + f"Failed to remove registry: {str(e)}", err=True)
+        raise click.Abort()
+
+
+@registry.command("update")
+@click.argument("name", required=False)
+@click.option("--all", "update_all", is_flag=True, help="Update all registries")
+def registry_update(name: str | None, update_all: bool) -> None:
+    """Update cached registry indexes."""
+    try:
+        manager = RegistryManager()
+
+        if update_all:
+            click.echo(click.style("Updating all registries...", fg="cyan"))
+            manager.update_all_registries()
+            click.echo(click.style("✓ ", fg="green") + "All registries updated")
+        elif name:
+            click.echo(click.style(f"Updating registry: {name}", fg="cyan"))
+            manager.update_registry(name)
+            click.echo(click.style("✓ ", fg="green") + f"Updated registry: {name}")
+        else:
+            click.echo(
+                click.style("✗ ", fg="red") + "Specify a registry name or use --all", err=True
+            )
+            raise click.Abort()
+
+    except ValueError as e:
+        click.echo(click.style("✗ ", fg="red") + str(e), err=True)
+        raise click.Abort()
+    except Exception as e:
+        click.echo(click.style("✗ ", fg="red") + f"Failed to update registry: {str(e)}", err=True)
+        raise click.Abort()
+
+
+@registry.command("build-index")
+@click.argument("registry_path", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    help="Output path for index.yaml (default: <registry_path>/index.yaml)",
+)
+def registry_build_index(registry_path: Path, output: Path | None) -> None:
+    """Generate index.yaml for a local registry."""
+    try:
+        click.echo(click.style(f"Building index for: {registry_path}", fg="cyan"))
+
+        manager = RegistryManager()
+        manager.build_index(registry_path, output)
+
+        output_path = output or registry_path / "index.yaml"
+        click.echo(click.style("✓ ", fg="green") + f"Index built: {output_path}")
+
+    except Exception as e:
+        click.echo(click.style("✗ ", fg="red") + f"Failed to build index: {str(e)}", err=True)
+        raise click.Abort()
+
+
+@cli.command()
+@click.argument("source")
+@click.option("--version", "-v", help="Specific version (for registry installs)")
+@click.option("--registry", "-r", help="Registry to install from (for registry installs)")
+def install(source: str, version: str | None, registry: str | None) -> None:
+    """Install a skill from various sources.
+
+    SOURCE can be:
+
+    \b
+    - Registry skill: @namespace/skill-name
+    - GitHub release: github:user/repo@version or github:user/repo
+    - Direct URL: https://example.com/skill.tar.gz
+    - Local file: ./skill.tar.gz or /path/to/skill.tar.gz
+
+    Examples:
+
+    \b
+    sutras install @username/my-skill
+    sutras install @username/my-skill --version 1.2.0
+    sutras install github:user/repo@v1.0.0
+    sutras install https://example.com/skills/skill-1.0.0.tar.gz
+    sutras install ./dist/my-skill-1.0.0.tar.gz
+    """
+    try:
+        installer = SkillInstaller()
+        installer.install(source, version, registry)
+
+        click.echo()
+        click.echo(click.style("Next steps:", fg="yellow", bold=True))
+        click.echo("  - Use the skill with Claude")
+        click.echo(f"  - Run: {click.style('sutras list', fg='green')} to see installed skills")
+
+    except ValueError as e:
+        click.echo(click.style("✗ ", fg="red") + str(e), err=True)
+        raise click.Abort()
+    except Exception as e:
+        click.echo(click.style("✗ ", fg="red") + f"Installation failed: {str(e)}", err=True)
+        raise click.Abort()
+
+
+@cli.command()
+@click.argument("skill_name")
+@click.option("--version", "-v", help="Specific version to uninstall (default: all versions)")
+def uninstall(skill_name: str, version: str | None) -> None:
+    """Uninstall a skill."""
+    try:
+        installer = SkillInstaller()
+        installer.uninstall(skill_name, version)
+
+    except ValueError as e:
+        click.echo(click.style("✗ ", fg="red") + str(e), err=True)
+        raise click.Abort()
+    except Exception as e:
+        click.echo(click.style("✗ ", fg="red") + f"Uninstallation failed: {str(e)}", err=True)
+        raise click.Abort()
+
+
+@cli.command()
+@click.argument("skill_path", type=click.Path(exists=True, path_type=Path), default=".")
+@click.option("--registry", "-r", help="Registry to publish to (default: default registry)")
+@click.option("--pr", is_flag=True, help="Use pull request workflow instead of direct push")
+@click.option("--build-dir", "-b", type=click.Path(path_type=Path), help="Custom build directory")
+def publish(skill_path: Path, registry: str | None, pr: bool, build_dir: Path | None) -> None:
+    """Publish a skill to a registry."""
+    try:
+        publisher = SkillPublisher()
+        publisher.publish(skill_path, registry, pr, build_dir)
+
+    except PublishError as e:
+        click.echo(click.style("✗ ", fg="red") + f"Publishing failed: {str(e)}", err=True)
+        raise click.Abort()
+    except Exception as e:
+        click.echo(click.style("✗ ", fg="red") + f"Error during publishing: {str(e)}", err=True)
         raise click.Abort()
 
 
