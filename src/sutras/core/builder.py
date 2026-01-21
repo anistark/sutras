@@ -40,7 +40,8 @@ class SkillBuilder:
         semver_pattern = r"^(\d+)\.(\d+)\.(\d+)(?:-([a-zA-Z0-9.-]+))?(?:\+([a-zA-Z0-9.-]+))?$"
         if not re.match(semver_pattern, version):
             raise BuildError(
-                f"Invalid version '{version}'. Must follow semver format (e.g., 1.0.0, 1.0.0-beta, 1.0.0+build)"
+                f"Invalid version '{version}'. Must follow semver format "
+                f"(e.g., 1.0.0, 1.0.0-beta, 1.0.0+build)"
             )
         return True
 

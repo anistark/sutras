@@ -11,6 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Skill packaging system with `sutras build` command
 - Semver validation for skill versions
 - Tarball distribution support for packaged skills
+- **Registry system**:
+  - Federated Git-based registry infrastructure
+  - Configuration management in `~/.sutras/config.yaml`
+  - Skill naming system with namespace support (`@namespace/skill-name`)
+  - `sutras registry` commands for managing registries:
+    - `registry add` - Add new registry
+    - `registry list` - List configured registries
+    - `registry remove` - Remove registry
+    - `registry update` - Update cached indexes
+    - `registry build-index` - Generate index.yaml for local registry
+  - `sutras install` command for installing skills from multiple sources:
+    - Install from registries: `@namespace/skill-name`
+    - Install from GitHub releases: `github:user/repo@version`
+    - Install from direct URLs: `https://example.com/skill.tar.gz`
+    - Install from local files: `./skill.tar.gz`
+  - `sutras uninstall` command for removing installed skills
+  - `sutras publish` command for publishing skills to registries
+  - Support for multiple registries with priority ordering
+  - Git-based registry caching in `~/.sutras/registry-cache/`
+  - Installation to `~/.claude/installed/` with symlinks in `~/.claude/skills/`
+  - SHA256 checksum verification for downloads
+  - Pull request workflow support for public registries (`--pr` flag)
+  - Private registry support via Git authentication
 
 ## [0.1.2](https://github.com/anistark/sutras/compare/v0.1.1...v0.1.2) - 2026-01-01
 

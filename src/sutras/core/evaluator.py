@@ -2,6 +2,7 @@
 
 import json
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -82,7 +83,8 @@ class RagasEvaluator(BaseEvaluator):
     def _check_ragas(self) -> bool:
         """Check if ragas is available."""
         try:
-            import ragas  # noqa: F401
+            import ragas  # noqa: F401  # type: ignore
+
             return True
         except ImportError:
             return False
@@ -95,12 +97,10 @@ class RagasEvaluator(BaseEvaluator):
     ) -> dict[str, float]:
         """Evaluate using Ragas metrics."""
         if not self._ragas_available:
-            raise ImportError(
-                "Ragas is not installed. Install with: pip install ragas"
-            )
+            raise ImportError("Ragas is not installed. Install with: pip install ragas")
 
-        from ragas import evaluate as ragas_evaluate
-        from ragas.metrics import (
+        from ragas import evaluate as ragas_evaluate  # type: ignore
+        from ragas.metrics import (  # type: ignore
             answer_relevancy,
             context_precision,
             faithfulness,
@@ -112,9 +112,7 @@ class RagasEvaluator(BaseEvaluator):
             "context_precision": context_precision,
         }
 
-        selected_metrics = [
-            metric_map[m] for m in self.metrics if m in metric_map
-        ]
+        selected_metrics = [metric_map[m] for m in self.metrics if m in metric_map]
 
         dataset = {
             "question": [inputs.get("question", "")],
@@ -128,8 +126,8 @@ class RagasEvaluator(BaseEvaluator):
         try:
             result = ragas_evaluate(dataset, metrics=selected_metrics)
             return {k: float(v) for k, v in result.items()}
-        except Exception as e:
-            return {"error": 0.0, "message": str(e)}
+        except Exception:
+            return {"error": 0.0}
 
     def get_metric_names(self) -> list[str]:
         """Get list of Ragas metrics."""
@@ -139,7 +137,7 @@ class RagasEvaluator(BaseEvaluator):
 class CustomEvaluator(BaseEvaluator):
     """Custom evaluator using user-defined functions."""
 
-    def __init__(self, eval_fn: callable, metric_names: list[str]):
+    def __init__(self, eval_fn: Callable[..., dict[str, float]], metric_names: list[str]):
         """Initialize custom evaluator.
 
         Args:
@@ -158,8 +156,8 @@ class CustomEvaluator(BaseEvaluator):
         """Evaluate using custom function."""
         try:
             return self.eval_fn(inputs, outputs, ground_truth)
-        except Exception as e:
-            return {"error": 0.0, "message": str(e)}
+        except Exception:
+            return {"error": 0.0}
 
     def get_metric_names(self) -> list[str]:
         """Get list of custom metrics."""
@@ -383,12 +381,9 @@ class Evaluator:
                 all_metrics[metric_name].append(score)
 
         avg_metrics = {
-            name: sum(scores) / len(scores)
-            for name, scores in all_metrics.items()
-            if scores
+            name: sum(scores) / len(scores) for name, scores in all_metrics.items() if scores
         }
 
-        threshold = self.skill.abi.eval.threshold if self.skill.abi.eval else None
         passed = sum(1 for r in results if r.passed)
         failed = len(results) - passed
 
@@ -405,11 +400,7 @@ class Evaluator:
 
         return summary
 
-    def _evaluate_case(
-        self,
-        case: dict[str, Any],
-        index: int
-    ) -> EvalResult:
+    def _evaluate_case(self, case: dict[str, Any], index: int) -> EvalResult:
         """Evaluate a single case.
 
         Args:

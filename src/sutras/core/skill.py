@@ -113,7 +113,11 @@ class Skill:
         # Discover supporting files
         supporting_files = {}
         for file_path in skill_path.glob("*"):
-            if file_path.is_file() and file_path.name not in ["SKILL.md", "sutras.yaml", "ability.yaml"]:
+            if file_path.is_file() and file_path.name not in [
+                "SKILL.md",
+                "sutras.yaml",
+                "ability.yaml",
+            ]:
                 supporting_files[file_path.name] = file_path
 
         return cls(
