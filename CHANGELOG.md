@@ -34,6 +34,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - SHA256 checksum verification for downloads
   - Pull request workflow support for public registries (`--pr` flag)
   - Private registry support via Git authentication
+- **Dependency resolution system**:
+  - Semver constraint parsing with npm-style syntax (`^1.0.0`, `~1.2.3`, `>=1.0.0 <2.0.0`, wildcards)
+  - `DependencyConfig` model for declaring skill dependencies in `sutras.yaml`
+  - Lock file support (`.sutras.lock`) for reproducible installations
+  - `DependencyResolver` for recursive dependency resolution
+  - Conflict detection for incompatible version constraints
+  - Circular dependency detection
+  - Topological sorting for correct installation order
 
 ## [0.1.2](https://github.com/anistark/sutras/compare/v0.1.1...v0.1.2) - 2026-01-01
 

@@ -288,11 +288,28 @@ license: "MIT"
 
 capabilities:
   tools: [Read, Write]
+  dependencies:
+    - name: "@utils/common"
+      version: "^1.0.0"
+    - "@tools/formatter"  # shorthand, any version
 
 distribution:
   tags: ["automation", "pdf"]
   category: "document-processing"
 ```
+
+### Dependency Version Constraints
+
+Sutras supports npm-style semver constraints:
+- **Exact**: `1.0.0` - Only version 1.0.0
+- **Caret**: `^1.0.0` - Compatible with 1.x.x (>=1.0.0 <2.0.0)
+- **Tilde**: `~1.2.3` - Compatible with 1.2.x (>=1.2.3 <1.3.0)
+- **Ranges**: `>=1.0.0 <2.0.0` - Explicit version ranges
+- **Wildcards**: `1.x`, `1.2.x`, `*` - Any matching version
+
+### Lock Files
+
+When dependencies are resolved, Sutras creates a `.sutras.lock` file that pins exact versions for reproducible installations. This file should be committed to version control.
 
 ### Supporting Files (optional)
 - `examples.md` - Usage examples

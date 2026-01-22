@@ -50,8 +50,8 @@ clean:
 run:
     uv run sutras --help
 
-# Run the CLI with custom args (usage: just run-with "list")
-run-with *ARGS:
+# Run sutras from dev state (usage: just sutras list, just sutras install @foo/bar)
+sutras *ARGS:
     uv run sutras {{ARGS}}
 
 # Install in development mode

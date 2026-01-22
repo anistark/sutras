@@ -50,7 +50,10 @@ sutras/
 │   │   ├── naming.py       # Skill naming system
 │   │   ├── registry.py     # Registry management
 │   │   ├── installer.py    # Skill installation
-│   │   └── publisher.py    # Skill publishing
+│   │   ├── publisher.py    # Skill publishing
+│   │   ├── semver.py       # Semantic versioning and constraints
+│   │   ├── lockfile.py     # Lock file management
+│   │   └── resolver.py     # Dependency resolution
 │   └── cli/
 │       ├── __init__.py
 │       └── main.py         # CLI commands
@@ -464,6 +467,82 @@ skills:
 - Network failures (use local file:// repos)
 - Checksum mismatches
 - Missing required fields in sutras.yaml
+
+## Dependency Resolution Development
+
+### Core Components
+
+1. **Semver** (`semver.py`): Semantic versioning parsing and constraint matching
+2. **Lockfile** (`lockfile.py`): Lock file management for reproducible installs
+3. **Resolver** (`resolver.py`): Dependency resolution with conflict detection
+
+### Testing Version Constraints
+
+```python
+from sutras.core.semver import Version, VersionRange, matches_constraint
+
+# Parse versions
+v = Version.parse("1.2.3")
+v_pre = Version.parse("1.0.0-alpha")
+
+# Parse constraints
+constraint = VersionRange.parse("^1.0.0")  # >=1.0.0 <2.0.0
+tilde = VersionRange.parse("~1.2.3")       # >=1.2.3 <1.3.0
+
+# Check matches
+matches_constraint("1.5.0", "^1.0.0")  # True
+matches_constraint("2.0.0", "^1.0.0")  # False
+```
+
+### Testing Dependency Resolution
+
+```python
+from sutras.core.resolver import DependencyResolver, DependencyRequest
+
+resolver = DependencyResolver()
+requests = [
+    DependencyRequest(name="@utils/common", constraint="^1.0.0", source="root"),
+    DependencyRequest(name="@tools/formatter", constraint="*", source="root"),
+]
+
+# This will:
+# 1. Search registries for matching versions
+# 2. Resolve transitive dependencies
+# 3. Detect conflicts and circular deps
+# 4. Return topologically sorted results
+resolved = resolver.resolve(requests)
+```
+
+### Testing Lock Files
+
+```python
+from sutras.core.lockfile import LockfileManager
+
+manager = LockfileManager()
+
+# Add locked skills
+manager.add_skill(
+    name="@utils/common",
+    version="1.2.3",
+    checksum="sha256...",
+    registry="default",
+)
+
+# Load existing lockfile
+lockfile = manager.load()
+print(lockfile.skills)
+
+# Get locked version
+version = manager.get_locked_version("@utils/common")  # "1.2.3"
+```
+
+### Error Handling
+
+Test these error scenarios:
+- `DependencyConflictError`: Incompatible version constraints
+- `CircularDependencyError`: A depends on B depends on A
+- `SkillNotFoundError`: Skill not in any registry
+- `NoMatchingVersionError`: No version satisfies constraints
 
 ## Questions?
 
