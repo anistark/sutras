@@ -9,11 +9,22 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class DependencyConfig(BaseModel):
+    """Configuration for a single skill dependency."""
+
+    name: str = Field(..., description="Dependency skill name (@namespace/name)")
+    version: str = Field("*", description="Version constraint (e.g., ^1.0.0, ~1.2.3, >=1.0.0)")
+    registry: str | None = Field(None, description="Specific registry to use")
+    optional: bool = Field(False, description="Whether this dependency is optional")
+
+
 class CapabilitiesConfig(BaseModel):
     """Capability declarations for a skill."""
 
     tools: list[str] = Field(default_factory=list, description="Required tools")
-    dependencies: list[str] = Field(default_factory=list, description="Skill dependencies")
+    dependencies: list[str] | list[DependencyConfig] = Field(
+        default_factory=list, description="Skill dependencies (strings or DependencyConfig)"
+    )
     constraints: dict[str, Any] = Field(default_factory=dict, description="Runtime constraints")
 
 
@@ -91,7 +102,10 @@ class SutrasABI(BaseModel):
                 "repository": "https://github.com/user/skill",
                 "capabilities": {
                     "tools": ["Read", "Write", "Bash"],
-                    "dependencies": [],
+                    "dependencies": [
+                        {"name": "@utils/helper", "version": "^1.0.0"},
+                        "@tools/common",
+                    ],
                     "constraints": {},
                 },
                 "tests": {

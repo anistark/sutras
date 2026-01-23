@@ -19,18 +19,25 @@ from urllib.request import urlopen
 import yaml
 
 from .config import SutrasConfig
+from .lockfile import LockfileManager
 from .naming import SkillName
 from .registry import RegistryManager
+from .resolver import DependencyRequest, DependencyResolver
 
 
 class SkillInstaller:
     """Manages skill installation and uninstallation."""
 
-    def __init__(self, config: SutrasConfig | None = None):
+    def __init__(
+        self,
+        config: SutrasConfig | None = None,
+        project_path: Path | None = None,
+    ):
         self.config = config or SutrasConfig()
         self.installed_dir = self.config.get_installed_dir()
         self.skills_dir = self.config.get_skills_dir()
         self.registry_manager = RegistryManager(config)
+        self.lockfile_manager = LockfileManager(project_path or Path.cwd())
 
         self.installed_dir.mkdir(parents=True, exist_ok=True)
         self.skills_dir.mkdir(parents=True, exist_ok=True)
@@ -228,6 +235,8 @@ class SkillInstaller:
         source: str | SkillName,
         version: str | None = None,
         registry_name: str | None = None,
+        update_lockfile: bool = True,
+        install_dependencies: bool = True,
     ) -> Path:
         """Install a skill from various sources.
 
@@ -239,6 +248,8 @@ class SkillInstaller:
                 - Local file: ./skill.tar.gz or /path/to/skill.tar.gz
             version: Specific version (only for registry installs)
             registry_name: Registry to install from (only for registry installs)
+            update_lockfile: Whether to update .sutras.lock after install
+            install_dependencies: Whether to install dependencies
 
         Returns:
             Path to installed skill
@@ -249,22 +260,70 @@ class SkillInstaller:
         source_str = str(source)
         source_type = self._detect_install_source(source_str)
 
+        # Check lockfile for pinned version (registry installs only)
+        if source_type == "registry" and version is None:
+            locked_version = self.lockfile_manager.get_locked_version(source_str)
+            if locked_version:
+                print(f"Using locked version {locked_version} from .sutras.lock")
+                version = locked_version
+
         if source_type == "registry":
-            return self._install_from_registry(source, version, registry_name)
+            install_path = self._install_from_registry(
+                source, version, registry_name, install_dependencies
+            )
         elif source_type == "github":
-            return self._install_from_github(source_str)
+            install_path = self._install_from_github(source_str)
         elif source_type == "url":
-            return self._install_from_url(source_str)
+            install_path = self._install_from_url(source_str)
         elif source_type == "file":
-            return self._install_from_file(Path(source_str))
+            install_path = self._install_from_file(Path(source_str))
         else:
             raise ValueError(f"Unknown installation source type: {source_type}")
+
+        # Update lockfile after successful install
+        if update_lockfile and source_type == "registry":
+            self._update_lockfile_entry(source_str, install_path, registry_name)
+
+        return install_path
+
+    def _update_lockfile_entry(
+        self,
+        skill_name: str,
+        install_path: Path,
+        registry_name: str | None,
+    ) -> None:
+        """Update lockfile with installed skill info."""
+        sutras_yaml = install_path / "sutras.yaml"
+        version = "0.0.0"
+        checksum = None
+        dependencies: list[str] = []
+
+        if sutras_yaml.exists():
+            with open(sutras_yaml) as f:
+                data = yaml.safe_load(f) or {}
+            version = data.get("version", "0.0.0")
+            caps = data.get("capabilities", {})
+            raw_deps = caps.get("dependencies", [])
+            for dep in raw_deps:
+                if isinstance(dep, str):
+                    dependencies.append(dep)
+                elif isinstance(dep, dict):
+                    dependencies.append(dep.get("name", ""))
+
+        self.lockfile_manager.add_skill(
+            name=skill_name,
+            version=version,
+            checksum=checksum,
+            registry=registry_name,
+            dependencies=dependencies,
+        )
 
     def _install_from_registry(
         self,
         skill_name: str | SkillName,
         version: str | None = None,
         registry_name: str | None = None,
+        install_dependencies: bool = True,
     ) -> Path:
         """Install a skill from a registry.
 
@@ -272,6 +331,7 @@ class SkillInstaller:
             skill_name: Skill name to install
             version: Specific version to install (default: latest)
             registry_name: Registry to install from (default: search all)
+            install_dependencies: Whether to install dependencies
 
         Returns:
             Path to installed skill
@@ -331,7 +391,89 @@ class SkillInstaller:
         self._create_symlink(skill_name, install_dir)
 
         print(f"✓ Installed {skill_name} {version}")
+
+        # Install dependencies if requested
+        if install_dependencies:
+            self._install_dependencies(install_dir, str(skill_name))
+
         return install_dir
+
+    def _install_dependencies(self, install_dir: Path, parent_skill: str) -> None:
+        """Install dependencies for an installed skill.
+
+        Args:
+            install_dir: Path to installed skill
+            parent_skill: Name of parent skill (for logging)
+        """
+        sutras_yaml = install_dir / "sutras.yaml"
+        if not sutras_yaml.exists():
+            return
+
+        with open(sutras_yaml) as f:
+            data = yaml.safe_load(f) or {}
+
+        capabilities = data.get("capabilities", {})
+        raw_deps = capabilities.get("dependencies", [])
+
+        if not raw_deps:
+            return
+
+        print(f"Resolving dependencies for {parent_skill}...")
+
+        resolver = DependencyResolver(
+            registry_manager=self.registry_manager,
+            lockfile_manager=self.lockfile_manager,
+            use_lockfile=True,
+        )
+
+        requests = []
+        for dep in raw_deps:
+            if isinstance(dep, str):
+                requests.append(
+                    DependencyRequest(
+                        name=dep,
+                        constraint="*",
+                        source=parent_skill,
+                    )
+                )
+            elif isinstance(dep, dict):
+                requests.append(
+                    DependencyRequest(
+                        name=dep.get("name", ""),
+                        constraint=dep.get("version", "*"),
+                        source=parent_skill,
+                        registry=dep.get("registry"),
+                        optional=dep.get("optional", False),
+                    )
+                )
+
+        try:
+            resolved = resolver.resolve(requests)
+
+            for skill in resolved:
+                # Skip if already installed at this version
+                existing_dir = (
+                    self.installed_dir
+                    / skill.name.replace("@", "").replace("/", "_")
+                    / skill.version
+                )
+                if existing_dir.exists():
+                    print(f"  ✓ {skill.name} {skill.version} (already installed)")
+                    continue
+
+                print(f"  Installing dependency: {skill.name} {skill.version}...")
+                self._install_from_registry(
+                    skill.name,
+                    version=skill.version,
+                    registry_name=skill.registry,
+                    install_dependencies=False,  # Don't recurse, resolver handles it
+                )
+
+            # Update lockfile with resolved dependencies
+            resolver.update_lockfile(resolved)
+
+        except Exception as e:
+            print(f"  Warning: Could not resolve dependencies: {e}")
 
     def _install_from_url(self, url: str) -> Path:
         """Install a skill from a direct URL.
