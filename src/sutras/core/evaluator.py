@@ -1,5 +1,6 @@
 """Evaluation framework for Sutras skills."""
 
+import asyncio
 import json
 from abc import ABC, abstractmethod
 from collections.abc import Callable
@@ -69,25 +70,72 @@ class BaseEvaluator(ABC):
 
 
 class RagasEvaluator(BaseEvaluator):
-    """Ragas-based evaluator for RAG applications."""
+    """Ragas-based evaluator for RAG applications (v0.4+ API)."""
 
-    def __init__(self, metrics: list[str] | None = None):
-        """Initialize Ragas evaluator.
-
-        Args:
-            metrics: List of Ragas metrics to compute
-        """
+    def __init__(
+        self,
+        metrics: list[str] | None = None,
+        model: str = "gpt-4o-mini",
+        embedding_model: str = "text-embedding-3-small",
+    ):
         self.metrics = metrics or ["faithfulness", "answer_relevancy", "context_precision"]
+        self.model = model
+        self.embedding_model = embedding_model
         self._ragas_available = self._check_ragas()
+        self._metric_instances: dict[str, Any] = {}
 
     def _check_ragas(self) -> bool:
-        """Check if ragas is available."""
         try:
-            import ragas  # noqa: F401  # type: ignore
-
+            import ragas  # noqa: F401
             return True
         except ImportError:
             return False
+
+    def _get_metric_instances(self) -> dict[str, Any]:
+        if self._metric_instances:
+            return self._metric_instances
+
+        from openai import AsyncOpenAI
+        from ragas.embeddings.base import embedding_factory
+        from ragas.llms import llm_factory
+        from ragas.metrics.collections import AnswerRelevancy, ContextPrecision, Faithfulness
+
+        client = AsyncOpenAI()
+        llm = llm_factory(model=self.model, client=client)
+        embeddings = embedding_factory(
+            provider="openai", model=self.embedding_model, client=client
+        )
+
+        metric_map = {
+            "faithfulness": Faithfulness(llm=llm),
+            "answer_relevancy": AnswerRelevancy(llm=llm, embeddings=embeddings),
+            "context_precision": ContextPrecision(llm=llm),
+        }
+
+        self._metric_instances = {m: metric_map[m] for m in self.metrics if m in metric_map}
+        return self._metric_instances
+
+    async def _score_faithfulness(
+        self, metric: Any, user_input: str, response: str, retrieved_contexts: list[str]
+    ) -> float:
+        result = await metric.ascore(
+            user_input=user_input, response=response, retrieved_contexts=retrieved_contexts
+        )
+        return result.value
+
+    async def _score_answer_relevancy(
+        self, metric: Any, user_input: str, response: str
+    ) -> float:
+        result = await metric.ascore(user_input=user_input, response=response)
+        return result.value
+
+    async def _score_context_precision(
+        self, metric: Any, user_input: str, reference: str, retrieved_contexts: list[str]
+    ) -> float:
+        result = await metric.ascore(
+            user_input=user_input, reference=reference, retrieved_contexts=retrieved_contexts
+        )
+        return result.value
 
     def evaluate(
         self,
@@ -95,42 +143,42 @@ class RagasEvaluator(BaseEvaluator):
         outputs: dict[str, Any],
         ground_truth: dict[str, Any] | None = None,
     ) -> dict[str, float]:
-        """Evaluate using Ragas metrics."""
         if not self._ragas_available:
-            raise ImportError("Ragas is not installed. Install with: pip install ragas")
+            raise ImportError("Ragas is not installed. Install with: pip install 'sutras[eval]'")
 
-        from ragas import evaluate as ragas_evaluate  # type: ignore
-        from ragas.metrics import (  # type: ignore
-            answer_relevancy,
-            context_precision,
-            faithfulness,
-        )
+        metric_instances = self._get_metric_instances()
 
-        metric_map = {
-            "faithfulness": faithfulness,
-            "answer_relevancy": answer_relevancy,
-            "context_precision": context_precision,
-        }
+        user_input = inputs.get("question", "")
+        response = outputs.get("answer", "")
+        retrieved_contexts = inputs.get("contexts", [])
+        reference = ground_truth.get("answer", "") if ground_truth else ""
 
-        selected_metrics = [metric_map[m] for m in self.metrics if m in metric_map]
-
-        dataset = {
-            "question": [inputs.get("question", "")],
-            "answer": [outputs.get("answer", "")],
-            "contexts": [inputs.get("contexts", [])],
-        }
-
-        if ground_truth:
-            dataset["ground_truth"] = [ground_truth.get("answer", "")]
+        async def run_all_metrics() -> dict[str, float]:
+            results = {}
+            for name, metric in metric_instances.items():
+                try:
+                    if name == "faithfulness":
+                        results[name] = await self._score_faithfulness(
+                            metric, user_input, response, retrieved_contexts
+                        )
+                    elif name == "answer_relevancy":
+                        results[name] = await self._score_answer_relevancy(
+                            metric, user_input, response
+                        )
+                    elif name == "context_precision":
+                        results[name] = await self._score_context_precision(
+                            metric, user_input, reference, retrieved_contexts
+                        )
+                except Exception:
+                    results[name] = 0.0
+            return results
 
         try:
-            result = ragas_evaluate(dataset, metrics=selected_metrics)
-            return {k: float(v) for k, v in result.items()}
+            return asyncio.run(run_all_metrics())
         except Exception:
             return {"error": 0.0}
 
     def get_metric_names(self) -> list[str]:
-        """Get list of Ragas metrics."""
         return self.metrics
 
 
