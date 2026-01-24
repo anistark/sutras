@@ -43,6 +43,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Circular dependency detection
   - Topological sorting for correct installation order
 
+### Changed
+- **[Ragas](https://github.com/vibrantlabsai/ragas) evaluator migrated to v0.4 API**:
+  - Import from `ragas.metrics.collections` instead of `ragas.metrics`
+  - Use class-based metrics (`Faithfulness`, `AnswerRelevancy`, `ContextPrecision`)
+  - Use `llm_factory()` and `embedding_factory()` for component initialization
+  - Use async `metric.ascore()` method with `MetricResult` return type
+  - Updated minimum ragas version to 0.4.3
+
 ## [0.1.2](https://github.com/anistark/sutras/compare/v0.1.1...v0.1.2) - 2026-01-01
 
 ### Added
