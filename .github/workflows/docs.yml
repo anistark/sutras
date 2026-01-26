@@ -26,6 +26,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install sphinx myst-parser sphinxawesome-theme
+
+      - name: Build docs
+        run: |
+          cd docs
+          sphinx-build -b html . _build/html
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
