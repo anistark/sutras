@@ -75,3 +75,15 @@ publish-test: clean build
 # Run all checks before commit
 pre-commit: qa test
     @echo "✓ All checks passed! Ready to commit."
+
+# Build documentation
+docs-build:
+    uv run --extra docs sphinx-build -b dirhtml docs docs/_build/html
+
+# Serve documentation with live reload
+docs-serve:
+    uv run --extra docs sphinx-autobuild -b dirhtml docs docs/_build/html --port 8000
+
+# Clean documentation build
+docs-clean:
+    rm -rf docs/_build
