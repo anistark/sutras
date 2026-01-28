@@ -21,8 +21,9 @@ html_title = "Sutras"
 theme_options = ThemeOptions(
     show_breadcrumbs=True,
     main_nav_links={
-        "CLI Reference": "cli",
-        "Contributing": "contributing",
+        "Getting Started": "getting-started/index",
+        "CLI Reference": "cli/index",
+        "Contributing": "contributing/index",
     },
     extra_header_link_icons={
         "GitHub": LinkIcon(

@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased](https://github.com/anistark/sutras/compare/v0.2.0...HEAD)
 
-...
+### Added
+- Sphinx documentation with GitHub Pages deployment
+- Documentation deploy workflow for automated publishing
 
 ## [0.2.0](https://github.com/anistark/sutras/compare/v0.1.2...v0.2.0) - 2026-01-26
 

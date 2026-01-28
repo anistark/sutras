@@ -1,3 +1,16 @@
-.sidebar a:hover {
+#left-sidebar a,
+.toctree-l1 a,
+.toctree-l2 a,
+nav a.reference {
+    transition: all 0.2s ease;
+}
+
+#left-sidebar a:hover,
+.toctree-l1 a:hover,
+.toctree-l2 a:hover,
+nav a.reference:hover {
     text-decoration: none;
+    text-shadow: 0 0 8px rgba(99, 102, 241, 0.6);
+    transform: scale(1.02);
+    display: inline-block;
 }
