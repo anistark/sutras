@@ -66,5 +66,6 @@ Building Claude skills manually means writing YAML frontmatter, managing metadat
 
 getting-started/index
 cli/index
+guides/index
 contributing/index
 ```
