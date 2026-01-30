@@ -23,6 +23,7 @@ theme_options = ThemeOptions(
     main_nav_links={
         "Getting Started": "getting-started/index",
         "CLI Reference": "cli/index",
+        "Guides": "guides/index",
         "Contributing": "contributing/index",
     },
     extra_header_link_icons={

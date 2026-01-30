@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Sphinx documentation with GitHub Pages deployment
 - Documentation deploy workflow for automated publishing
+- **Documentation guides**:
+  - Registry usage guide (`docs/guides/registry.md`)
+  - Publishing guide (`docs/guides/publishing.md`)
+  - Private registry setup guide (`docs/guides/private-registry.md`)
+- **Unit tests for core modules**:
+  - Skill naming system tests (`test_naming.py`)
+  - Semver constraint parsing tests (`test_semver.py`)
+  - Configuration management tests (`test_config.py`)
+  - Dependency resolver tests (`test_resolver.py`)
 
 ## [0.2.0](https://github.com/anistark/sutras/compare/v0.1.2...v0.2.0) - 2026-01-26
 
