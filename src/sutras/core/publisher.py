@@ -219,7 +219,7 @@ class SkillPublisher:
         builder = SkillBuilder(skill, output_dir=build_dir or Path.cwd() / "dist")
         tarball_path = builder.build()
 
-        version = skill.abi.version
+        version = skill.abi.version if skill.abi else "0.0.0"
 
         print(f"Preparing registry '{registry_name}'...")
         registry_path = self._prepare_registry(registry_name, use_pr)
