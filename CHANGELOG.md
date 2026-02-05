@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased](https://github.com/anistark/sutras/compare/v0.2.0...HEAD)
 
 ### Added
+- **Skill templates**: `sutras new --template` for scaffolding skills from built-in templates
+  - `default` - Minimal skill scaffold (existing behaviour, now explicit)
+  - `code-review` - Code review skill with diff analysis and feedback patterns
+  - `api-integration` - API integration skill with request handling and error patterns
+  - `data-analysis` - Data analysis skill with file processing and reporting patterns
+  - `automation` - Workflow automation skill with task orchestration patterns
+  - `sutras new --list-templates` to discover available templates
+- Skill template unit tests (`test_templates.py`)
+- Templates guide (`docs/guides/templates.md`)
 - Sphinx documentation with GitHub Pages deployment
 - Documentation deploy workflow for automated publishing
 - **Documentation guides**:

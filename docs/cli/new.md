@@ -12,7 +12,7 @@ sutras new <name> [OPTIONS]
 
 | Argument | Description | Required |
 |----------|-------------|----------|
-| `name` | Name of the skill to create | Yes |
+| `name` | Name of the skill to create | Yes (unless `--list-templates`) |
 
 ## Options
 
@@ -20,7 +20,30 @@ sutras new <name> [OPTIONS]
 |--------|-------------|---------|
 | `--description TEXT` | Skill description | None |
 | `--author TEXT` | Skill author | None |
+| `--template TEXT` | Template to scaffold from | `default` |
+| `--list-templates` | List available templates and exit | False |
 | `--global` | Create in global skills directory (`~/.claude/skills/`) | False (project) |
+
+## Templates
+
+Templates provide pre-configured SKILL.md, sutras.yaml, and examples.md files
+tailored to common skill categories.
+
+### List available templates
+
+```sh
+sutras new --list-templates
+```
+
+### Built-in templates
+
+| Template | Description |
+|----------|-------------|
+| `default` | Minimal skill scaffold with basic structure |
+| `code-review` | Code review skill with diff analysis and feedback patterns |
+| `api-integration` | API integration skill with request handling and error patterns |
+| `data-analysis` | Data analysis skill with file processing and reporting patterns |
+| `automation` | Workflow automation skill with task orchestration patterns |
 
 ## Examples
 
@@ -30,10 +53,16 @@ sutras new <name> [OPTIONS]
 sutras new my-skill
 ```
 
-### Create with description
+### Create from a template
 
 ```sh
-sutras new my-skill --description "Automates PDF document processing"
+sutras new my-reviewer --template code-review
+```
+
+### Create with description and template
+
+```sh
+sutras new my-api --template api-integration --description "Integrates with Stripe API"
 ```
 
 ### Create with author
@@ -58,6 +87,8 @@ Creates the following structure:
 ├── sutras.yaml        # Metadata (version, author, tests, etc.)
 └── examples.md        # Usage examples
 ```
+
+The content of each file depends on the selected template.
 
 ## Skill Locations
 

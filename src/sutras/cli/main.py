@@ -158,7 +158,7 @@ def info(name: str) -> None:
 
 
 @cli.command()
-@click.argument("name")
+@click.argument("name", required=False)
 @click.option(
     "--description",
     "-d",
@@ -170,13 +170,59 @@ def info(name: str) -> None:
     help="Skill author name",
 )
 @click.option(
+    "--template",
+    "-t",
+    default="default",
+    help="Template to use (run with --list-templates to see options)",
+)
+@click.option(
+    "--list-templates",
+    is_flag=True,
+    help="List available skill templates",
+)
+@click.option(
     "--global",
     "global_",
     is_flag=True,
     help="Create in global skills directory (~/.claude/skills/)",
 )
-def new(name: str, description: str | None, author: str | None, global_: bool) -> None:
-    """Create a new skill with proper structure."""
+def new(
+    name: str | None,
+    description: str | None,
+    author: str | None,
+    template: str,
+    list_templates: bool,
+    global_: bool,
+) -> None:
+    """Create a new skill with proper structure.
+
+    Use --template to start from a specialized template:
+
+    \b
+      sutras new my-skill --template code-review
+      sutras new my-api --template api-integration
+
+    Use --list-templates to see all available templates.
+    """
+    from sutras.core import templates as _templates
+
+    if list_templates:
+        templates = _templates.list_templates()
+        click.echo(click.style(f"Available templates ({len(templates)}):", fg="green", bold=True))
+        click.echo()
+        for tmpl in templates:
+            click.echo(f"  {click.style(tmpl.name, fg='cyan', bold=True)}")
+            click.echo(f"    {tmpl.description}")
+            click.echo()
+        click.echo(click.style("Usage:", fg="yellow", bold=True))
+        click.echo(click.style("  sutras new <name> --template <template>", fg="cyan"))
+        return
+
+    if not name:
+        click.echo(click.style("✗ ", fg="red") + "Skill name is required", err=True)
+        click.echo("\nUsage: sutras new <name> [OPTIONS]")
+        raise click.Abort()
+
     if not name.replace("-", "").replace("_", "").isalnum():
         click.echo(
             click.style("✗ ", fg="red")
@@ -186,6 +232,13 @@ def new(name: str, description: str | None, author: str | None, global_: bool) -
         raise click.Abort()
 
     name = name.lower()
+
+    try:
+        tmpl = _templates.get_template(template)
+    except ValueError as e:
+        click.echo(click.style("✗ ", fg="red") + str(e), err=True)
+        click.echo(f"\nRun {click.style('sutras new --list-templates', fg='cyan')} to see options")
+        raise click.Abort()
 
     if global_:
         skills_dir = Path.home() / ".claude" / "skills"
@@ -200,92 +253,22 @@ def new(name: str, description: str | None, author: str | None, global_: bool) -
         )
         raise click.Abort()
 
+    description = description or f"Description of {name} skill"
+    author = author or "Skill Author"
+
+    rendered = _templates.render_template(tmpl, name, description, author)
+
     click.echo(click.style(f"Creating skill: {name}", fg="cyan", bold=True))
+    if template != "default":
+        click.echo(click.style(f"  Template: {template}", fg="blue"))
     click.echo()
 
-    # Create directory structure
     skill_dir.mkdir(parents=True, exist_ok=True)
 
-    # Create SKILL.md
-    description = description or f"Description of {name} skill"
-    skill_md_content = f"""---
-name: {name}
-description: {description}
----
+    for filename, content in sorted(rendered.items()):
+        (skill_dir / filename).write_text(content)
+        click.echo(click.style("✓ ", fg="green") + f"Created {filename}")
 
-# {name.replace("-", " ").title()}
-
-## Instructions
-
-Add your skill instructions here. Provide step-by-step guidance for Claude
-on how to use this skill effectively.
-
-1. First step
-2. Second step
-3. Third step
-
-## When to Use
-
-Describe the scenarios when Claude should invoke this skill.
-
-## Examples
-
-Provide concrete examples of how this skill works.
-"""
-
-    (skill_dir / "SKILL.md").write_text(skill_md_content)
-
-    # Create sutras.yaml
-    author = author or "Skill Author"
-    sutras_yaml_content = f"""version: "0.1.0"
-author: "{author}"
-license: "MIT"
-
-# Capability declarations
-capabilities:
-  tools: []
-  dependencies: []
-  constraints: {{}}
-
-# Test configuration (optional)
-# tests:
-#   cases:
-#     - name: "basic-test"
-#       inputs:
-#         example: "value"
-#       expected:
-#         result: "expected"
-
-# Evaluation configuration (optional)
-# eval:
-#   framework: "ragas"
-#   metrics: ["correctness"]
-
-# Distribution metadata
-distribution:
-  tags: []
-  category: "general"
-"""
-
-    (skill_dir / "sutras.yaml").write_text(sutras_yaml_content)
-
-    # Create examples.md
-    examples_md_content = f"""# {name.replace("-", " ").title()} - Examples
-
-## Example 1: Basic Usage
-
-Description of basic usage scenario.
-
-## Example 2: Advanced Usage
-
-Description of advanced usage scenario.
-"""
-
-    (skill_dir / "examples.md").write_text(examples_md_content)
-
-    click.echo(click.style("✓ ", fg="green") + "Created SKILL.md")
-    click.echo(click.style("✓ ", fg="green") + "Created sutras.yaml")
-    click.echo(click.style("✓ ", fg="green") + "Created examples.md")
     click.echo()
     click.echo(click.style("✓ Success!", fg="green", bold=True) + " Skill created at:")
     click.echo(click.style(f"  {skill_dir}", fg="cyan"))
