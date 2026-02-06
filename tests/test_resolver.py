@@ -1,7 +1,5 @@
 """Tests for dependency resolution."""
 
-import pytest
-
 from sutras.core.resolver import (
     CircularDependencyError,
     DependencyConflictError,
@@ -11,7 +9,6 @@ from sutras.core.resolver import (
     ResolvedSkill,
     SkillNotFoundError,
 )
-from sutras.core.semver import Version
 
 
 class TestResolvedSkill:
@@ -137,12 +134,20 @@ class TestTopologicalSort:
         )
         resolver._resolved = {
             "a": ResolvedSkill(
-                name="a", version="1.0.0", registry=None,
-                tarball_url=None, checksum=None, dependencies=["b"]
+                name="a",
+                version="1.0.0",
+                registry=None,
+                tarball_url=None,
+                checksum=None,
+                dependencies=["b"],
             ),
             "b": ResolvedSkill(
-                name="b", version="1.0.0", registry=None,
-                tarball_url=None, checksum=None, dependencies=[]
+                name="b",
+                version="1.0.0",
+                registry=None,
+                tarball_url=None,
+                checksum=None,
+                dependencies=[],
             ),
         }
 
@@ -157,16 +162,28 @@ class TestTopologicalSort:
         )
         resolver._resolved = {
             "a": ResolvedSkill(
-                name="a", version="1.0.0", registry=None,
-                tarball_url=None, checksum=None, dependencies=["b", "c"]
+                name="a",
+                version="1.0.0",
+                registry=None,
+                tarball_url=None,
+                checksum=None,
+                dependencies=["b", "c"],
             ),
             "b": ResolvedSkill(
-                name="b", version="1.0.0", registry=None,
-                tarball_url=None, checksum=None, dependencies=["c"]
+                name="b",
+                version="1.0.0",
+                registry=None,
+                tarball_url=None,
+                checksum=None,
+                dependencies=["c"],
             ),
             "c": ResolvedSkill(
-                name="c", version="1.0.0", registry=None,
-                tarball_url=None, checksum=None, dependencies=[]
+                name="c",
+                version="1.0.0",
+                registry=None,
+                tarball_url=None,
+                checksum=None,
+                dependencies=[],
             ),
         }
 
@@ -181,12 +198,20 @@ class TestTopologicalSort:
         )
         resolver._resolved = {
             "a": ResolvedSkill(
-                name="a", version="1.0.0", registry=None,
-                tarball_url=None, checksum=None, dependencies=[]
+                name="a",
+                version="1.0.0",
+                registry=None,
+                tarball_url=None,
+                checksum=None,
+                dependencies=[],
             ),
             "b": ResolvedSkill(
-                name="b", version="1.0.0", registry=None,
-                tarball_url=None, checksum=None, dependencies=[]
+                name="b",
+                version="1.0.0",
+                registry=None,
+                tarball_url=None,
+                checksum=None,
+                dependencies=[],
             ),
         }
 
@@ -199,11 +224,7 @@ class TestParseDependencies:
         resolver = DependencyResolver(
             registry_manager=None, lockfile_manager=None, use_lockfile=False
         )
-        data = {
-            "capabilities": {
-                "dependencies": ["@user/skill-a", "@user/skill-b"]
-            }
-        }
+        data = {"capabilities": {"dependencies": ["@user/skill-a", "@user/skill-b"]}}
 
         deps = resolver._parse_dependencies(data)
         assert len(deps) == 2
@@ -216,9 +237,7 @@ class TestParseDependencies:
         )
         data = {
             "capabilities": {
-                "dependencies": [
-                    {"name": "@user/skill", "version": "^1.0.0", "optional": True}
-                ]
+                "dependencies": [{"name": "@user/skill", "version": "^1.0.0", "optional": True}]
             }
         }
 

@@ -86,7 +86,8 @@ class RagasEvaluator(BaseEvaluator):
 
     def _check_ragas(self) -> bool:
         try:
-            import ragas  # noqa: F401
+            import ragas  # noqa: F401  # type: ignore[import-not-found]
+
             return True
         except ImportError:
             return False
@@ -95,16 +96,18 @@ class RagasEvaluator(BaseEvaluator):
         if self._metric_instances:
             return self._metric_instances
 
-        from openai import AsyncOpenAI
-        from ragas.embeddings.base import embedding_factory
-        from ragas.llms import llm_factory
-        from ragas.metrics.collections import AnswerRelevancy, ContextPrecision, Faithfulness
+        from openai import AsyncOpenAI  # type: ignore[import-not-found]
+        from ragas.embeddings.base import embedding_factory  # type: ignore[import-not-found]
+        from ragas.llms import llm_factory  # type: ignore[import-not-found]
+        from ragas.metrics.collections import (  # type: ignore[import-not-found]
+            AnswerRelevancy,
+            ContextPrecision,
+            Faithfulness,
+        )
 
         client = AsyncOpenAI()
         llm = llm_factory(model=self.model, client=client)
-        embeddings = embedding_factory(
-            provider="openai", model=self.embedding_model, client=client
-        )
+        embeddings = embedding_factory(provider="openai", model=self.embedding_model, client=client)
 
         metric_map = {
             "faithfulness": Faithfulness(llm=llm),
@@ -123,9 +126,7 @@ class RagasEvaluator(BaseEvaluator):
         )
         return result.value
 
-    async def _score_answer_relevancy(
-        self, metric: Any, user_input: str, response: str
-    ) -> float:
+    async def _score_answer_relevancy(self, metric: Any, user_input: str, response: str) -> float:
         result = await metric.ascore(user_input=user_input, response=response)
         return result.value
 
@@ -471,7 +472,8 @@ class Evaluator:
                 ground_truth=expected,
             )
 
-            threshold = self.skill.abi.eval.threshold if self.skill.abi.eval else None
+            abi = self.skill.abi
+            threshold = abi.eval.threshold if abi and abi.eval else None
             if threshold is not None:
                 avg_score = sum(metrics.values()) / len(metrics) if metrics else 0.0
                 passed = avg_score >= threshold
