@@ -16,6 +16,7 @@ except PackageNotFoundError:
 
 from sutras.core.abi import SutrasABI
 from sutras.core.builder import BuildError, SkillBuilder
+from sutras.core.docgen import generate_docs, write_docs
 from sutras.core.loader import SkillLoader
 from sutras.core.skill import Skill, SkillMetadata
 
@@ -26,5 +27,7 @@ __all__ = [
     "SkillLoader",
     "SkillBuilder",
     "BuildError",
+    "generate_docs",
+    "write_docs",
     "__version__",
 ]

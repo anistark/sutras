@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased](https://github.com/anistark/sutras/compare/v0.2.0...HEAD)
 
 ### Added
+- **Skill documentation generation**: `sutras docs` command to auto-generate Markdown reference from SKILL.md, sutras.yaml, and supporting files
+  - Print to stdout or write to file/directory (`-o`)
+  - Renders title, badges (version/author/license), metadata table, tools, dependencies, instructions, tests, evaluation config
+  - Appends supporting `.md` file contents (e.g. examples.md); toggle with `--no-supporting`
+  - Core library API: `generate_docs()` and `write_docs()` for programmatic use
+- Skill documentation generation tests (`test_docgen.py`)
+- CLI reference page for `sutras docs` (`docs/cli/docs.md`)
 - **Skill templates**: `sutras new --template` for scaffolding skills from built-in templates
   - `default` - Minimal skill scaffold (existing behaviour, now explicit)
   - `code-review` - Code review skill with diff analysis and feedback patterns
