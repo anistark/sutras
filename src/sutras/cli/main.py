@@ -8,6 +8,7 @@ import click
 from sutras import SkillLoader, __version__
 from sutras.core.builder import BuildError, SkillBuilder
 from sutras.core.config import SutrasConfig
+from sutras.core.docgen import generate_docs, write_docs
 from sutras.core.evaluator import Evaluator
 from sutras.core.installer import SkillInstaller
 from sutras.core.publisher import PublishError, SkillPublisher
@@ -699,6 +700,61 @@ def validate(name: str, strict: bool) -> None:
                 click.style("✗ ", fg="red") + f"Error validating skill: {str(e)}",
                 err=True,
             )
+        raise click.Abort()
+
+
+@cli.command()
+@click.argument("name")
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    help="Output file or directory (default: print to stdout)",
+)
+@click.option(
+    "--no-supporting",
+    is_flag=True,
+    help="Exclude supporting file contents (examples.md, etc.)",
+)
+def docs(name: str, output: Path | None, no_supporting: bool) -> None:
+    """Generate documentation for a skill.
+
+    Auto-generates a Markdown reference from SKILL.md metadata,
+    sutras.yaml ABI, and supporting files.
+
+    \b
+    Examples:
+      sutras docs my-skill
+      sutras docs my-skill -o docs/skills/
+      sutras docs my-skill -o my-skill-reference.md
+    """
+    loader = SkillLoader()
+
+    try:
+        skill = loader.load(name)
+
+        include_supporting = not no_supporting
+
+        if output:
+            out_path = write_docs(skill, output, include_supporting=include_supporting)
+            click.echo(
+                click.style("✓ ", fg="green")
+                + f"Documentation written to {click.style(str(out_path), fg='cyan')}"
+            )
+        else:
+            content = generate_docs(skill, include_supporting=include_supporting)
+            click.echo(content)
+
+    except FileNotFoundError as e:
+        click.echo(click.style("✗ ", fg="red") + f"Skill not found: {name}", err=True)
+        click.echo(click.style(f"  {str(e)}", fg="yellow"), err=True)
+        click.echo("\nRun 'sutras list' to see available skills")
+        raise click.Abort()
+    except Exception as e:
+        click.echo(
+            click.style("✗ ", fg="red") + f"Error generating docs: {str(e)}",
+            err=True,
+        )
         raise click.Abort()
 
 

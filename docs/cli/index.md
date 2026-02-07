@@ -12,6 +12,7 @@ Create, inspect, and validate skills:
 - [`sutras list`](list.md) - List available skills
 - [`sutras info`](info.md) - View skill details
 - [`sutras validate`](validate.md) - Validate skill structure
+- [`sutras docs`](docs.md) - Generate skill documentation
 
 ### Testing & Evaluation
 
@@ -43,6 +44,7 @@ new
 list
 info
 validate
+docs
 test
 eval
 build
