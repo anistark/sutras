@@ -2,7 +2,7 @@
 
 **Devtool for Anthropic Agent Skills with lifecycle management.**
 
-![Sutras Architecture](./docs/static/sutras-architecture.png)
+![Sutras Architecture](https://raw.githubusercontent.com/anistark/sutras/main/docs/static/sutras-architecture.png)
 
 Sutras is a CLI tool and library for creating, validating, and managing [Anthropic Agent Skills](https://platform.claude.com/docs/en/agent-sdk/skills). It provides scaffolding, validation, and a standardized Skill ABI for better skill organization and quality.
 
@@ -349,6 +349,4 @@ Contributions welcome! See [CONTRIBUTING.md](./CONTRIBUTING.md) for:
 - Testing requirements
 - PR process
 
-## License
-
-MIT License - see [LICENSE](./LICENSE)
+#### [MIT LICENSE](./LICENSE)
