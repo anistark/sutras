@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased](https://github.com/anistark/sutras/compare/v0.3.0...HEAD)
 
-...
+### Added
+- `sutras setup` command to install the sutras skill into Claude Code (`~/.claude/skills/sutras/`)
+- Pi extension with `/sutras` command, autocomplete, interactive skill creation, and auto-validation on write
+- Pi skill (SKILL.md) with full command reference for LLM-driven skill development
+- npm package (`sutras` on npm) for `pi install npm:sutras`
+- `scripts/sync_pi.py` to auto-generate pi skill + extension from Click CLI introspection
+- `just sync-pi` and `just check-sync` recipes for sync enforcement
 
 ## [v0.3.0](https://github.com/anistark/sutras/compare/v0.2.0...v0.3.0) - 2026-02-08
 

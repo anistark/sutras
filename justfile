@@ -72,8 +72,16 @@ publish-test: clean build
     @echo "📦 Publishing to Test PyPI..."
     uv publish --publish-url https://test.pypi.org/legacy/
 
+# Sync pi extension + skill from CLI introspection
+sync-pi:
+    uv run python scripts/sync_pi.py
+
+# Check pi files are in sync (CI)
+check-sync:
+    uv run python scripts/sync_pi.py --check
+
 # Run all checks before commit
-pre-commit: qa test
+pre-commit: qa test check-sync
     @echo "✓ All checks passed! Ready to commit."
 
 # Build documentation

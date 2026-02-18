@@ -1,0 +1,20 @@
+{
+  "name": "sutras",
+  "version": "0.3.0",
+  "description": "Skill development toolkit for pi — /sutras commands + agent skill",
+  "keywords": ["pi-package", "skills", "agent-skills", "sutras", "anthropic"],
+  "license": "MIT",
+  "author": "Kumar Anirudha <oss@anirudha.dev>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anistark/sutras",
+    "directory": "pi"
+  },
+  "pi": {
+    "extensions": ["extensions"],
+    "skills": ["skills"]
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*"
+  }
+}

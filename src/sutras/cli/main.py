@@ -1076,5 +1076,68 @@ def publish(skill_path: Path, registry: str | None, pr: bool, build_dir: Path | 
         raise click.Abort()
 
 
+@cli.command()
+@click.option(
+    "--check",
+    is_flag=True,
+    help="Show what would be installed without making changes",
+)
+@click.option(
+    "--uninstall",
+    is_flag=True,
+    help="Remove the sutras skill from Claude Code",
+)
+def setup(check: bool, uninstall: bool) -> None:
+    """Install the sutras skill into Claude Code's global skills directory.
+
+    Copies the bundled SKILL.md to ~/.claude/skills/sutras/ so Claude Code
+    can discover and use sutras commands.
+    """
+    target_dir = Path.home() / ".claude" / "skills" / "sutras"
+    target_file = target_dir / "SKILL.md"
+
+    if uninstall:
+        if target_file.exists():
+            target_file.unlink()
+            if target_dir.exists() and not any(target_dir.iterdir()):
+                target_dir.rmdir()
+            click.echo(click.style("✓ ", fg="green") + "Sutras skill removed from Claude Code")
+        else:
+            click.echo(click.style("⚠ ", fg="yellow") + "Sutras skill not installed")
+        return
+
+    # Locate bundled SKILL.md
+    from importlib.resources import files as resource_files
+
+    skill_resource = resource_files("sutras").joinpath("data", "skills", "sutras", "SKILL.md")
+    try:
+        skill_content = skill_resource.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        click.echo(
+            click.style("✗ ", fg="red") + "Bundled SKILL.md not found in package data",
+            err=True,
+        )
+        raise click.Abort()
+
+    if check:
+        click.echo(click.style("Would install:", fg="cyan", bold=True))
+        click.echo(f"  {target_file}")
+        if target_file.exists():
+            click.echo(click.style("  (exists, would be overwritten)", fg="yellow"))
+        else:
+            click.echo(click.style("  (new file)", fg="green"))
+        return
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_file.write_text(skill_content)
+
+    click.echo(click.style("✓ ", fg="green", bold=True) + "Sutras skill installed for Claude Code")
+    click.echo(click.style(f"  {target_file}", fg="cyan"))
+    click.echo()
+    click.echo(
+        click.style("The skill will be available next time Claude Code starts.", fg="bright_black")
+    )
+
+
 if __name__ == "__main__":
     cli()
