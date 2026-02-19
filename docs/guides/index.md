@@ -6,6 +6,7 @@ In-depth guides for using Sutras effectively.
 :maxdepth: 2
 
 templates
+pi-integration
 registry
 publishing
 private-registry

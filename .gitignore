@@ -110,6 +110,12 @@ venv.bak/
 # User skills directory (skills created with sutras new)
 .claude/
 
+# Pi project-local config
+.pi/
+
+# Node modules (pi extension dev)
+node_modules/
+
 # Project
 plan.md
 

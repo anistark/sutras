@@ -30,6 +30,10 @@ Package and share skills:
 - [`sutras install`](install.md) - Install skills
 - [`sutras uninstall`](uninstall.md) - Uninstall skills
 
+### Setup & Integrations
+
+- [`sutras setup`](setup.md) - Install sutras skill into Claude Code
+
 ### Registry Management
 
 Manage skill registries:
@@ -51,5 +55,6 @@ build
 publish
 install
 uninstall
+setup
 registry
 ```

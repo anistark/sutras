@@ -22,6 +22,7 @@ Sutras is a CLI tool and library for creating, validating, and managing [Anthrop
 - **Test & Evaluate**: Run tests and evaluate skills with metrics
 - **Package**: Build distributable tarballs with checksums
 - **Distribute**: Publish and install skills from federated Git-based registries
+- **Integrations**: First-class support for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [pi](https://github.com/badlogic/pi)
 
 ## Why Sutras?
 
@@ -43,6 +44,22 @@ Or with uv:
 
 ```sh
 uv pip install sutras
+```
+
+### Claude Code Integration
+
+Install the sutras skill so Claude Code can create and manage skills:
+
+```sh
+sutras setup
+```
+
+### Pi Integration
+
+Install the sutras extension for pi (provides `/sutras` commands):
+
+```sh
+pi install npm:sutras
 ```
 
 ## Quick Start
@@ -104,6 +121,19 @@ sutras test <name> [--verbose] [--fail-fast]
 
 # Evaluate with metrics
 sutras eval <name> [--verbose] [--no-history] [--show-history]
+```
+
+### Setup & Integrations
+
+```sh
+# Install sutras skill into Claude Code
+sutras setup
+
+# Check what would be installed
+sutras setup --check
+
+# Remove the skill from Claude Code
+sutras setup --uninstall
 ```
 
 ### Distribution
