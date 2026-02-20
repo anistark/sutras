@@ -58,19 +58,40 @@ sutras *ARGS:
 install:
     uv sync
 
-# Publish to PyPI (requires credentials in ~/.pypirc)
-publish: clean build
+# Check that pyproject.toml and pi/package.json versions match
+check-versions:
+    #!/usr/bin/env bash
+    pypi_ver=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+    npm_ver=$(grep '"version"' pi/package.json | sed 's/.*"\([0-9][^"]*\)".*/\1/')
+    if [ "$pypi_ver" != "$npm_ver" ]; then
+        echo "❌ Version mismatch: pyproject.toml=$pypi_ver, pi/package.json=$npm_ver"
+        exit 1
+    fi
+    echo "✓ Versions in sync: $pypi_ver"
+
+# Publish everything (PyPI + npm)
+publish: check-versions publish-pypi publish-npm
+
+# Publish CLI to PyPI (requires credentials in ~/.pypirc)
+publish-pypi: clean build
     @echo "🔨 Building package..."
     uv build --sdist --wheel
     @echo "📦 Publishing to PyPI..."
     uv publish --token "$(grep -A2 '\[pypi\]' ~/.pypirc | grep password | cut -d'=' -f2- | xargs)"
 
-# Publish to Test PyPI
-publish-test: clean build
+# Publish pi extension to npm
+publish-npm:
+    @echo "📦 Publishing pi extension to npm..."
+    cd pi && pnpm publish
+
+# Publish to Test PyPI + dry-run npm
+publish-test: check-versions clean build
     @echo "🔨 Building package..."
     uv build --sdist --wheel
     @echo "📦 Publishing to Test PyPI..."
     uv publish --publish-url https://test.pypi.org/legacy/
+    @echo "📦 Dry-run npm publish..."
+    cd pi && pnpm publish --dry-run --no-git-checks
 
 # Sync pi extension + skill from CLI introspection
 sync-pi:

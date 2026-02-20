@@ -56,6 +56,9 @@ sutras setup
 
 ### Pi Integration
 
+[![npm](https://img.shields.io/npm/v/sutras)](https://www.npmjs.com/package/sutras)
+[![npm downloads](https://img.shields.io/npm/dm/sutras)](https://www.npmjs.com/package/sutras)
+
 Install the sutras extension for pi (provides `/sutras` commands):
 
 ```sh
