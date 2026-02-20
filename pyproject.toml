@@ -53,9 +53,6 @@ Repository = "https://github.com/anistark/sutras"
 [tool.hatch.build.targets.wheel]
 packages = ["src/sutras"]
 
-[tool.hatch.build.targets.wheel.force-include]
-"src/sutras/data" = "sutras/data"
-
 [tool.hatch.build.targets.sdist]
 include = [
     "/src/sutras",
