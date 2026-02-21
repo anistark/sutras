@@ -95,6 +95,7 @@ async function handleSkillCommand(command: string, args: string[], ctx: Extensio
 		{ value: "build", label: "build — Build a distributable package for a skill." },
 		{ value: "docs", label: "docs — Generate documentation for a skill." },
 		{ value: "eval", label: "eval — Evaluate a skill using configured metrics." },
+		{ value: "help", label: "help — Show available commands or help for a specific command." },
 		{ value: "info", label: "info — Show detailed information about a skill." },
 		{ value: "install", label: "install — Install a skill from various sources." },
 		{ value: "list", label: "list — List available skills." },
@@ -114,6 +115,33 @@ async function handleSkillCommand(command: string, args: string[], ctx: Extensio
 
 const SKILL_COMMANDS = ["info", "validate", "test", "eval", "build", "docs"];
 
+function buildHelpText(): string {
+	const cmds = SUBCOMMANDS.filter((s) => s.value !== "help");
+	return (
+		"Sutras — Skill Development Toolkit\n\n" +
+		"Usage: /sutras <command> [args]\n\n" +
+		"Commands:\n" +
+		cmds.map((s) => `  ${s.label}`).join("\n") +
+		"\n\nRun /sutras help <command> for details on a specific command."
+	);
+}
+
+async function handleHelp(args: string[], ctx: ExtensionCommandContext, pi: ExtensionAPI) {
+	if (args.length === 0) {
+		ctx.ui.notify(buildHelpText(), "info");
+		return;
+	}
+
+	// Delegate to `sutras <command> --help` for detailed help
+	const result = await runSutras(pi, [...args, "--help"], ctx, { silent: true });
+	const output = result.stdout || result.stderr;
+	if (output) {
+		ctx.ui.notify(output, "info");
+	} else {
+		ctx.ui.notify(`No help available for: ${args.join(" ")}`, "warning");
+	}
+}
+
 export default function (pi: ExtensionAPI) {
 	let sutrasAvailable = false;
 
@@ -123,7 +151,7 @@ export default function (pi: ExtensionAPI) {
 		if (sutrasAvailable) {
 			ctx.ui.setStatus("sutras", `sutras ${stripAnsi(result.stdout ?? "").trim()}`);
 		} else {
-			ctx.ui.notify("Sutras not found. Install with: pip install sutras", "warning");
+			ctx.ui.notify("Sutras CLI not found. Install with: pipx install sutras (or: uv tool install sutras)", "warning");
 		}
 	});
 
@@ -155,7 +183,7 @@ export default function (pi: ExtensionAPI) {
 
 		handler: async (args, ctx) => {
 			if (!sutrasAvailable) {
-				ctx.ui.notify("Sutras is not installed.\n\nInstall with: pip install sutras", "error");
+				ctx.ui.notify("Sutras CLI is not installed.\n\nInstall with:\n  pipx install sutras\n  uv tool install sutras\n  pip install --user sutras", "error");
 				return;
 			}
 
@@ -163,17 +191,14 @@ export default function (pi: ExtensionAPI) {
 			const sub = parts[0] || "";
 			const rest = parts.slice(1);
 
-			if (sub === "new") {
+			if (sub === "help") {
+				await handleHelp(rest, ctx, pi);
+			} else if (sub === "new") {
 				await handleNew(rest, ctx, pi);
 			} else if (SKILL_COMMANDS.includes(sub)) {
 				await handleSkillCommand(sub, rest, ctx, pi);
 			} else if (sub === "") {
-				ctx.ui.notify(
-					"Sutras — Skill Development Toolkit\n\n" +
-						"Usage: /sutras <command> [args]\n\n" +
-						SUBCOMMANDS.map((s) => `  ${s.label}`).join("\n"),
-					"info",
-				);
+				ctx.ui.notify(buildHelpText(), "info");
 			} else {
 				await runSutras(pi, parts, ctx);
 			}

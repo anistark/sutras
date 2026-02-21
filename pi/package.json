@@ -1,6 +1,6 @@
 {
   "name": "sutras",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Skill development toolkit for pi — /sutras commands + agent skill",
   "keywords": [
     "pi-package",
@@ -22,8 +22,12 @@
   },
   "files": [
     "extensions",
-    "skills"
+    "skills",
+    "scripts"
   ],
+  "scripts": {
+    "postinstall": "bash scripts/postinstall.sh"
+  },
   "packageManager": "pnpm@10.6.2",
   "pi": {
     "extensions": [
