@@ -4,13 +4,33 @@ description: >
   Create, validate, test, build, and distribute Anthropic Agent Skills using the Sutras CLI.
   Use when the user asks to create a new skill, scaffold skill structure, validate SKILL.md files,
   manage skill metadata, run skill tests/evaluations, build distributable packages, or publish
-  skills to registries. Version 0.3.0.
+  skills to registries. Requires sutras >= 0.4.1.
 ---
 
 # Sutras — Skill Development Toolkit
 
 Sutras is a CLI for the full lifecycle of Anthropic Agent Skills:
 scaffolding, validation, testing, evaluation, packaging, and distribution.
+
+## Prerequisites
+
+Before running any sutras command, verify the CLI is installed:
+
+```bash
+sutras --version
+```
+
+If the command is not found, **ask the user** to install it before proceeding.
+Suggest the install method based on what is available on their system:
+
+| Tool available | Install command |
+|---------------|-----------------|
+| `pipx` | `pipx install sutras` |
+| `uv` | `uv tool install sutras` |
+| `pip` / `pip3` | `pip install --user sutras` |
+
+Check in this order: `pipx`, `uv`, `pip3`, `pip`. Use the first one found.
+Do NOT run the install command without the user's confirmation.
 
 ## Command Reference
 
