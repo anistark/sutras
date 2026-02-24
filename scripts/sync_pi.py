@@ -22,10 +22,14 @@ import click
 ROOT = Path(__file__).resolve().parent.parent
 PI_SKILL_PATH = ROOT / "pi" / "skills" / "sutras" / "SKILL.md"
 PI_EXT_PATH = ROOT / "pi" / "extensions" / "sutras.ts"
+PI_POSTINSTALL_PATH = ROOT / "pi" / "scripts" / "postinstall.sh"
 BUNDLED_SKILL_PATH = ROOT / "src" / "sutras" / "data" / "skills" / "sutras" / "SKILL.md"
 
 AUTO_START = "// ── AUTO-GENERATED:START ──"
 AUTO_END = "// ── AUTO-GENERATED:END ──"
+
+SYNC_MIN_VERSION_START = "# ── AUTO-SYNC:MIN_VERSION ──"
+SYNC_MIN_VERSION_END = "# ── AUTO-SYNC:END ──"
 
 
 def get_version() -> str:
@@ -228,6 +232,31 @@ def write_or_check(path: Path, content: str, check: bool) -> bool:
     return False
 
 
+def update_postinstall_version(path: Path, version: str, check: bool) -> bool:
+    """Update MIN_VERSION in the postinstall script between markers."""
+    if not path.exists():
+        print(f"Warning: {path} does not exist, skipping postinstall update", file=sys.stderr)
+        return False
+
+    content = path.read_text()
+    start = content.find(SYNC_MIN_VERSION_START)
+    end = content.find(SYNC_MIN_VERSION_END)
+
+    if start == -1 or end == -1:
+        print(
+            f"Warning: MIN_VERSION markers not found in {path}",
+            file=sys.stderr,
+        )
+        return False
+
+    new_content = (
+        content[: start + len(SYNC_MIN_VERSION_START)]
+        + f'\nMIN_VERSION="{version}"\n'
+        + content[end:]
+    )
+    return write_or_check(path, new_content, check)
+
+
 def update_extension(ext_path: Path, block: str, check: bool) -> bool:
     """Update the auto-generated section of the extension file."""
     if not ext_path.exists():
@@ -270,6 +299,7 @@ def main():
     changed |= write_or_check(PI_SKILL_PATH, skill_md, check)
     changed |= write_or_check(BUNDLED_SKILL_PATH, skill_md, check)
     changed |= update_extension(PI_EXT_PATH, ext_block, check)
+    changed |= update_postinstall_version(PI_POSTINSTALL_PATH, version, check)
 
     # Sync version to pi/package.json
     import json
