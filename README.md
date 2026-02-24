@@ -126,7 +126,7 @@ sutras test <name> [--verbose] [--fail-fast]
 sutras eval <name> [--verbose] [--no-history] [--show-history]
 ```
 
-### Setup & Integrations
+### Setup & Maintenance
 
 ```sh
 # Install sutras skill into Claude Code
@@ -137,6 +137,15 @@ sutras setup --check
 
 # Remove the skill from Claude Code
 sutras setup --uninstall
+
+# Check for updates
+sutras update --check
+
+# Update CLI, pi extension, and global skill in one step
+sutras update
+
+# Pin to a specific version
+sutras update -v 0.5.0
 ```
 
 ### Distribution

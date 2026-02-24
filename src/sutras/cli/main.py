@@ -1139,5 +1139,127 @@ def setup(check: bool, uninstall: bool) -> None:
     )
 
 
+@cli.command()
+@click.option(
+    "--version",
+    "-v",
+    "target_version",
+    default=None,
+    help="Update to a specific version (default: latest)",
+)
+@click.option(
+    "--check",
+    is_flag=True,
+    help="Only check if an update is available, don't install",
+)
+@click.option(
+    "--skip-pi",
+    is_flag=True,
+    help="Skip updating the pi extension",
+)
+@click.option(
+    "--skip-skill",
+    is_flag=True,
+    help="Skip refreshing the global skill (~/.claude/skills/sutras/)",
+)
+def update(target_version: str | None, check: bool, skip_pi: bool, skip_skill: bool) -> None:
+    """Check for updates and upgrade sutras to the latest version.
+
+    Updates all components:
+    - Python CLI (via pipx/uv/pip)
+    - pi extension (via pi/pnpm/npm)
+    - Global skill (~/.claude/skills/sutras/SKILL.md)
+
+    \b
+    Examples:
+      sutras update                # Update everything to latest
+      sutras update --check        # Just check, don't install
+      sutras update -v 0.5.0       # Pin to a specific version
+      sutras update --skip-pi      # Update CLI + skill only
+    """
+    from sutras.core.updater import (
+        check_update_available,
+        update_all,
+    )
+
+    current, latest = check_update_available()
+
+    if check:
+        click.echo(click.style(f"Current version: {current}", fg="cyan"))
+        if latest:
+            click.echo(click.style(f"Latest version:  {latest}", fg="green", bold=True))
+            click.echo()
+            click.echo(f"Run {click.style('sutras update', fg='cyan')} to upgrade.")
+        else:
+            click.echo(click.style("✓ Already up-to-date!", fg="green"))
+        return
+
+    if not target_version and not latest:
+        click.echo(click.style(f"✓ sutras {current} is already the latest version.", fg="green"))
+        # Still refresh skill in case it's stale
+        if not skip_skill:
+            from sutras.core.updater import refresh_global_skill
+
+            result = refresh_global_skill()
+            if result.updated:
+                click.echo(click.style("✓ ", fg="green") + "Refreshed global skill")
+        return
+
+    effective_version = target_version or latest
+    click.echo(
+        click.style(f"Updating sutras {current} → {effective_version}", fg="cyan", bold=True)
+    )
+    click.echo()
+
+    summary = update_all(
+        target_version=target_version,
+        skip_pi=skip_pi,
+        skip_skill=skip_skill,
+    )
+
+    LABELS = {
+        "cli": "Python CLI",
+        "pi-extension": "pi extension",
+        "global-skill": "Global skill",
+    }
+
+    for result in summary.results:
+        label = LABELS.get(result.component, result.component)
+
+        if result.updated:
+            version_info = ""
+            if result.old_version and result.new_version:
+                version_info = f" ({result.old_version} → {result.new_version})"
+            elif result.new_version:
+                version_info = f" ({result.new_version})"
+            click.echo(click.style("✓ ", fg="green") + f"{label} updated{version_info}")
+
+        elif result.skipped:
+            if result.error:
+                msg = f"{label} skipped — {result.error}"
+                click.echo(click.style("⊘ ", fg="bright_black") + msg)
+            else:
+                click.echo(click.style("· ", fg="bright_black") + f"{label} already up-to-date")
+
+        elif result.error:
+            click.echo(click.style("✗ ", fg="red") + f"{label} failed: {result.error}")
+
+    click.echo()
+
+    if summary.any_updated:
+        click.echo(click.style("✓ Update complete!", fg="green", bold=True))
+        click.echo(
+            click.style(
+                "  Restart your terminal or pi session to use the new version.",
+                fg="bright_black",
+            )
+        )
+    elif not summary.any_errors:
+        click.echo(click.style("✓ Everything is up-to-date.", fg="green"))
+    else:
+        click.echo(click.style("⚠ Some components could not be updated.", fg="yellow"))
+        click.echo("  See errors above for details.")
+
+
 if __name__ == "__main__":
     cli()

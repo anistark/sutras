@@ -7,7 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased](https://github.com/anistark/sutras/compare/v0.4.1...HEAD)
 
-...
+### Added
+- `sutras update` command — check for updates and upgrade all components in one step:
+  - Python CLI (auto-detects pipx/uv/pip and uses matching upgrade path)
+  - pi extension (via `pi pkg update` / pnpm / npm)
+  - Global skill (`~/.claude/skills/sutras/SKILL.md`)
+  - `--check` flag to only check without installing
+  - `-v` / `--version` flag to pin to a specific version
+  - `--skip-pi` and `--skip-skill` flags for selective updates
+- `src/sutras/core/updater.py` — core update logic with PyPI/npm version checking, installer detection, and structured result reporting
+- CLI reference documentation for `sutras update` (`docs/cli/update.md`)
+
+### Changed
+- `postinstall.sh` now compares installed CLI version against `MIN_VERSION` using semver and **upgrades** if stale, instead of silently skipping when any version is found
+- `scripts/sync_pi.py` now auto-syncs `MIN_VERSION` in `postinstall.sh` from `pyproject.toml`, preventing version drift between the npm package and its minimum CLI requirement
+- Renamed "Setup & Integrations" section to "Setup & Maintenance" in CLI docs index and README
 
 ## [v0.4.1](https://github.com/anistark/sutras/compare/v0.4.0...v0.4.1) - 2026-02-21
 
