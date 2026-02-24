@@ -4,7 +4,7 @@ description: >
   Create, validate, test, build, and distribute Anthropic Agent Skills using the Sutras CLI.
   Use when the user asks to create a new skill, scaffold skill structure, validate SKILL.md files,
   manage skill metadata, run skill tests/evaluations, build distributable packages, or publish
-  skills to registries. Version 0.4.1.
+  skills to registries. Requires sutras CLI.
 ---
 
 # Sutras — Skill Development Toolkit

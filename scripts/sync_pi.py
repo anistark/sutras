@@ -77,7 +77,7 @@ def _extract_params(cmd: click.Command) -> list[dict]:
 # ── SKILL.md generation ──────────────────────────────────────────────────────
 
 
-def generate_skill_md(commands: list[dict], version: str) -> str:
+def generate_skill_md(commands: list[dict]) -> str:
     cmd_ref_lines = []
     for cmd in commands:
         args = ""
@@ -102,7 +102,7 @@ description: >
   Create, validate, test, build, and distribute Anthropic Agent Skills using the Sutras CLI.
   Use when the user asks to create a new skill, scaffold skill structure, validate SKILL.md files,
   manage skill metadata, run skill tests/evaluations, build distributable packages, or publish
-  skills to registries. Version {version}.
+  skills to registries. Requires sutras CLI.
 ---
 
 # Sutras — Skill Development Toolkit
@@ -292,7 +292,7 @@ def main():
     else:
         print(f"Syncing pi files (v{version}, {len(commands)} commands)...")
 
-    skill_md = generate_skill_md(commands, version)
+    skill_md = generate_skill_md(commands)
     ext_block = generate_extension_block(commands)
 
     changed = False
