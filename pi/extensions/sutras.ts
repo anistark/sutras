@@ -95,7 +95,6 @@ async function handleSkillCommand(command: string, args: string[], ctx: Extensio
 		{ value: "build", label: "build — Build a distributable package for a skill." },
 		{ value: "docs", label: "docs — Generate documentation for a skill." },
 		{ value: "eval", label: "eval — Evaluate a skill using configured metrics." },
-		{ value: "help", label: "help — Show available commands or help for a specific command." },
 		{ value: "info", label: "info — Show detailed information about a skill." },
 		{ value: "install", label: "install — Install a skill from various sources." },
 		{ value: "list", label: "list — List available skills." },
@@ -109,6 +108,7 @@ async function handleSkillCommand(command: string, args: string[], ctx: Extensio
 		{ value: "setup", label: "setup — Install the sutras skill into Claude Code's global skills directory." },
 		{ value: "test", label: "test — Run tests for a skill." },
 		{ value: "uninstall", label: "uninstall — Uninstall a skill." },
+		{ value: "update", label: "update — Check for updates and upgrade sutras to the latest version." },
 		{ value: "validate", label: "validate — Validate a skill's structure and metadata." },
 	];
 	// ── AUTO-GENERATED:END ──
