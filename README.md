@@ -46,11 +46,19 @@ Or with uv:
 uv pip install sutras
 ```
 
-### Claude Code Integration
+### Claude Code Plugin (Recommended)
 
-Install the sutras skill so Claude Code can create and manage skills:
+Install via a plugin marketplace (e.g., [AgentHub](https://github.com/nullorder/agenthub)):
 
 ```sh
+/plugin marketplace add nullorder/agenthub
+/plugin install sutras@agenthub
+```
+
+Or install the skill directly using the CLI:
+
+```sh
+pip install sutras
 sutras setup
 ```
 
