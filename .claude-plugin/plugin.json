@@ -1,0 +1,13 @@
+{
+  "name": "sutras",
+  "description": "Devtool for creating, testing, and distributing Anthropic Agent Skills with lifecycle management, Skill ABI, and federated registries",
+  "version": "0.4.4",
+  "author": {
+    "name": "Kumar Anirudha",
+    "email": "oss@anirudha.dev"
+  },
+  "homepage": "https://anistark.github.io/sutras/",
+  "repository": "https://github.com/anistark/sutras",
+  "license": "MIT",
+  "keywords": ["skills", "agent", "devtools", "registry", "packaging", "scaffolding"]
+}
