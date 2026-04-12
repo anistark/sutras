@@ -13,6 +13,8 @@ Sutras is a CLI tool and library for creating, validating, and managing [Anthrop
 ![maintenance-status](https://img.shields.io/badge/maintenance-actively--developed-brightgreen.svg)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
+[![AgentHub](https://agenthub.nullorder.org/badge.svg)](https://agenthub.nullorder.org)
+
 ## Key Features
 
 - **Scaffold**: Generate skills with proper structure and best-practice templates
