@@ -6,6 +6,8 @@ from pathlib import Path
 import click
 
 from sutras import SkillLoader, __version__
+from sutras.cli.errors import invalid_skill, operation_failed, skill_not_found
+from sutras.cli.progress import spinner
 from sutras.core.builder import BuildError, SkillBuilder
 from sutras.core.config import SutrasConfig
 from sutras.core.docgen import generate_docs, write_docs
@@ -16,15 +18,29 @@ from sutras.core.registry import RegistryManager
 from sutras.core.test_runner import TestRunner
 
 
+def _verbose(ctx: click.Context) -> bool:
+    """Get verbose flag from Click context, considering both global and local flags."""
+    return ctx.obj.get("verbose", False) if ctx.obj else False
+
+
 @click.group()
 @click.version_option(version=__version__)
-def cli() -> None:
+@click.option(
+    "--verbose",
+    "-v",
+    is_flag=True,
+    default=False,
+    help="Enable verbose output for debugging",
+)
+@click.pass_context
+def cli(ctx: click.Context, verbose: bool) -> None:
     """
     Sutras - Devtool for Anthropic Agent Skills.
 
     Create, evaluate, test, distribute, and discover skills with ease.
     """
-    pass
+    ctx.ensure_object(dict)
+    ctx.obj["verbose"] = verbose
 
 
 @cli.command()
@@ -39,10 +55,17 @@ def cli() -> None:
     default=True,
     help="Include global skills from ~/.claude/skills/",
 )
-def list(local: bool, global_: bool) -> None:
+@click.pass_context
+def list(ctx: click.Context, local: bool, global_: bool) -> None:
     """List available skills."""
+    verbose = _verbose(ctx)
     try:
         loader = SkillLoader(include_project=local, include_global=global_)
+        if verbose:
+            click.echo(click.style("Search paths:", fg="bright_black"))
+            for p in loader.search_paths:
+                click.echo(click.style(f"  {p}", fg="bright_black"))
+            click.echo()
         skills = loader.discover()
 
         if not skills:
@@ -145,17 +168,11 @@ def info(name: str) -> None:
             click.echo()
 
     except FileNotFoundError as e:
-        click.echo(click.style(f"✗ Skill not found: {name}", fg="red"), err=True)
-        click.echo(click.style(f"  {str(e)}", fg="yellow"), err=True)
-        click.echo("\nRun 'sutras list' to see available skills")
-        raise click.Abort()
+        skill_not_found(name, str(e))
     except ValueError as e:
-        click.echo(click.style(f"✗ Invalid skill format: {name}", fg="red"), err=True)
-        click.echo(click.style(f"  {str(e)}", fg="yellow"), err=True)
-        raise click.Abort()
+        invalid_skill(name, str(e))
     except Exception as e:
-        click.echo(click.style(f"✗ Error loading skill: {str(e)}", fg="red"), err=True)
-        raise click.Abort()
+        operation_failed("Loading skill", str(e))
 
 
 @cli.command()
@@ -296,8 +313,10 @@ def new(
     is_flag=True,
     help="Stop on first test failure",
 )
-def test(name: str, verbose: bool, fail_fast: bool) -> None:
+@click.pass_context
+def test(ctx: click.Context, name: str, verbose: bool, fail_fast: bool) -> None:
     """Run tests for a skill."""
+    verbose = verbose or _verbose(ctx)
     loader = SkillLoader()
 
     try:
@@ -396,13 +415,9 @@ tests:
             raise click.Abort()
 
     except FileNotFoundError as e:
-        click.echo(click.style("✗ ", fg="red") + f"Skill not found: {name}", err=True)
-        click.echo(click.style(f"  {str(e)}", fg="yellow"), err=True)
-        click.echo("\nRun 'sutras list' to see available skills")
-        raise click.Abort()
+        skill_not_found(name, str(e))
     except Exception as e:
-        click.echo(click.style("✗ ", fg="red") + f"Error running tests: {str(e)}", err=True)
-        raise click.Abort()
+        operation_failed("Running tests", str(e))
 
 
 @cli.command()
@@ -423,8 +438,12 @@ tests:
     is_flag=True,
     help="Show evaluation history for this skill",
 )
-def eval(name: str, verbose: bool, no_history: bool, show_history: bool) -> None:
+@click.pass_context
+def eval(
+    ctx: click.Context, name: str, verbose: bool, no_history: bool, show_history: bool
+) -> None:
     """Evaluate a skill using configured metrics."""
+    verbose = verbose or _verbose(ctx)
     loader = SkillLoader()
 
     try:
@@ -496,7 +515,8 @@ eval:
             click.echo()
 
         try:
-            summary = evaluator.run(save_history=not no_history)
+            with spinner("Running evaluation"):
+                summary = evaluator.run(save_history=not no_history)
         except ImportError as e:
             click.echo(click.style("✗ ", fg="red") + str(e), err=True)
             click.echo()
@@ -568,16 +588,18 @@ eval:
             raise click.Abort()
 
     except FileNotFoundError as e:
-        click.echo(click.style("✗ ", fg="red") + f"Skill not found: {name}", err=True)
-        click.echo(click.style(f"  {str(e)}", fg="yellow"), err=True)
-        click.echo("\nRun 'sutras list' to see available skills")
-        raise click.Abort()
+        skill_not_found(name, str(e))
     except ValueError as e:
-        click.echo(click.style("✗ ", fg="red") + f"Configuration error: {str(e)}", err=True)
-        raise click.Abort()
+        operation_failed(
+            "Evaluation config",
+            str(e),
+            [
+                "Check the 'eval' section in sutras.yaml",
+                f"Run {click.style(f'sutras validate {name}', fg='cyan')} to check skill structure",
+            ],
+        )
     except Exception as e:
-        click.echo(click.style("✗ ", fg="red") + f"Error running evaluation: {str(e)}", err=True)
-        raise click.Abort()
+        operation_failed("Running evaluation", str(e))
 
 
 @cli.command()
@@ -587,11 +609,33 @@ eval:
     is_flag=True,
     help="Enable strict validation (warnings become errors)",
 )
-def validate(name: str, strict: bool) -> None:
-    """Validate a skill's structure and metadata."""
+@click.pass_context
+def validate(ctx: click.Context, name: str, strict: bool) -> None:
+    """Validate a skill's structure and metadata.
+
+    Checks SKILL.md structure, sutras.yaml schema, version format,
+    and distribution readiness. Use --strict to treat warnings as errors.
+
+    \b
+    Examples:
+      sutras validate my-skill
+      sutras validate my-skill --strict
+    """
+    import re
+
+    verbose = _verbose(ctx)
     loader = SkillLoader()
-    warnings = []
-    errors = []
+    warnings: list[tuple[str, str, str | None]] = []  # (category, message, fix)
+    errors: list[tuple[str, str, str | None]] = []  # (category, message, fix)
+
+    def _ok(msg: str) -> None:
+        click.echo(click.style("  ✓", fg="green") + f" {msg}")
+
+    def _warn(category: str, msg: str, fix: str | None = None) -> None:
+        warnings.append((category, msg, fix))
+
+    def _err(category: str, msg: str, fix: str | None = None) -> None:
+        errors.append((category, msg, fix))
 
     try:
         click.echo(click.style(f"Validating skill: {name}", fg="cyan", bold=True))
@@ -599,108 +643,213 @@ def validate(name: str, strict: bool) -> None:
 
         skill = loader.load(name)
 
-        click.echo(click.style("✓", fg="green") + " SKILL.md found and parsed")
+        if verbose:
+            click.echo(click.style("  Path:", fg="bright_black") + f" {skill.path}")
+            click.echo()
+
+        # --- Structure checks ---
+        click.echo(click.style("Structure", fg="blue", bold=True))
+
+        _ok("SKILL.md found and parsed")
 
         if not skill.name:
-            errors.append("Missing skill name")
-        else:
-            click.echo(
-                click.style("✓", fg="green") + f" Valid name: {click.style(skill.name, fg='cyan')}"
+            _err(
+                "structure",
+                "Missing 'name' in SKILL.md frontmatter",
+                "Add 'name: my-skill' to the YAML frontmatter",
             )
+        else:
+            if not re.match(r"^[a-z0-9][a-z0-9._-]*$", skill.name):
+                _warn(
+                    "structure",
+                    f"Name '{skill.name}' uses non-standard characters",
+                    "Use lowercase alphanumeric, hyphens, underscores",
+                )
+            _ok(f"Name: {click.style(skill.name, fg='cyan')}")
 
         if not skill.description:
-            errors.append("Missing skill description")
+            _err(
+                "structure",
+                "Missing 'description' in SKILL.md frontmatter",
+                "Add 'description: ...' to the YAML frontmatter",
+            )
         else:
             desc_len = len(skill.description)
-            if desc_len < 50:
-                warnings.append(
-                    f"Description is short ({desc_len} chars, recommend 50+ for Claude discovery)"
+            if desc_len < 20:
+                _warn(
+                    "structure",
+                    f"Description very short ({desc_len} chars)",
+                    "Write 20+ chars for Claude to understand the skill",
                 )
-            click.echo(click.style("✓", fg="green") + f" Valid description ({desc_len} chars)")
-
-        if skill.abi:
-            click.echo(click.style("✓", fg="green") + " sutras.yaml found and parsed")
-
-            if not skill.abi.version:
-                warnings.append("Missing version in sutras.yaml")
-            else:
-                click.echo(
-                    click.style("✓", fg="green")
-                    + f" Version: {click.style(skill.abi.version, fg='blue')}"
+            elif desc_len < 50:
+                _warn(
+                    "structure",
+                    f"Description is short ({desc_len} chars)",
+                    "Recommend 50+ chars for better Claude discovery",
                 )
+            _ok(f"Description ({desc_len} chars)")
 
-            if not skill.abi.author:
-                warnings.append("Missing author in sutras.yaml")
-            else:
-                click.echo(click.style("✓", fg="green") + f" Author: {skill.abi.author}")
-
-            if not skill.abi.license:
-                warnings.append("Missing license in sutras.yaml (recommended for distribution)")
-
-            if skill.abi.distribution:
-                if not skill.abi.distribution.tags:
-                    warnings.append("No tags specified (helps with skill discovery)")
-                if not skill.abi.distribution.category:
-                    warnings.append("No category specified (helps with skill organization)")
-        else:
-            warnings.append("No sutras.yaml found (recommended for lifecycle management)")
-
-        if skill.allowed_tools:
-            click.echo(
-                click.style("✓", fg="green") + f" Allowed tools: {', '.join(skill.allowed_tools)}"
+        if not skill.instructions or len(skill.instructions.strip()) < 10:
+            _warn(
+                "structure",
+                "SKILL.md instructions body is empty or very short",
+                "Add detailed instructions after the frontmatter",
             )
 
+        if skill.allowed_tools:
+            _ok(f"Allowed tools: {', '.join(skill.allowed_tools)}")
+
         if skill.supporting_files:
-            click.echo(
-                click.style("✓", fg="green")
-                + f" {len(skill.supporting_files)} supporting file(s) found"
+            _ok(f"{len(skill.supporting_files)} supporting file(s)")
+
+        click.echo()
+
+        # --- ABI checks ---
+        click.echo(click.style("ABI (sutras.yaml)", fg="blue", bold=True))
+
+        if skill.abi:
+            _ok("sutras.yaml found and parsed")
+
+            if not skill.abi.version:
+                _err("abi", "Missing 'version' field", "Add 'version: \"0.1.0\"' to sutras.yaml")
+            else:
+                if not re.match(r"^\d+\.\d+\.\d+", skill.abi.version):
+                    _err(
+                        "abi",
+                        f"Version '{skill.abi.version}' is not valid semver",
+                        "Use format: MAJOR.MINOR.PATCH (e.g., 1.0.0)",
+                    )
+                else:
+                    _ok(f"Version: {click.style(skill.abi.version, fg='blue')}")
+
+            if not skill.abi.author:
+                _warn(
+                    "abi",
+                    "Missing 'author' field",
+                    "Add 'author: \"Your Name\"' to sutras.yaml",
+                )
+            else:
+                _ok(f"Author: {skill.abi.author}")
+
+            if not skill.abi.license:
+                _warn("abi", "Missing 'license' field", "Add 'license: \"MIT\"' to sutras.yaml")
+            else:
+                _ok(f"License: {skill.abi.license}")
+
+            if skill.abi.repository:
+                _ok(f"Repository: {skill.abi.repository}")
+        else:
+            _warn(
+                "abi",
+                "No sutras.yaml found",
+                "Create sutras.yaml for version, testing, and distribution",
             )
 
         click.echo()
 
-        if warnings:
-            click.echo(click.style(f"Warnings ({len(warnings)}):", fg="yellow", bold=True))
-            for warning in warnings:
-                click.echo(click.style("  ⚠ ", fg="yellow") + warning)
+        # --- Distribution readiness ---
+        click.echo(click.style("Distribution", fg="blue", bold=True))
+
+        if skill.abi and skill.abi.distribution:
+            dist = skill.abi.distribution
+            if dist.tags:
+                _ok(f"Tags: {', '.join(dist.tags)}")
+            else:
+                _warn(
+                    "distribution",
+                    "No tags specified",
+                    "Add tags for better skill discoverability",
+                )
+
+            if dist.category:
+                _ok(f"Category: {dist.category}")
+            else:
+                _warn(
+                    "distribution",
+                    "No category specified",
+                    "Add a category to help organize the skill",
+                )
+
+            if dist.homepage:
+                _ok(f"Homepage: {dist.homepage}")
+            if dist.keywords:
+                _ok(f"Keywords: {', '.join(dist.keywords)}")
+        elif skill.abi:
+            _warn(
+                "distribution",
+                "No distribution metadata",
+                "Add a 'distribution' section with tags and category",
+            )
+        else:
+            click.echo(click.style("  ·", fg="bright_black") + " Skipped (no sutras.yaml)")
+
+        click.echo()
+
+        # --- Testing config ---
+        if verbose:
+            click.echo(click.style("Testing", fg="blue", bold=True))
+            if skill.abi and skill.abi.tests and skill.abi.tests.cases:
+                _ok(f"{len(skill.abi.tests.cases)} test case(s) defined")
+            else:
+                _warn(
+                    "testing",
+                    "No test cases defined",
+                    "Add test cases in the 'tests' section of sutras.yaml",
+                )
             click.echo()
+
+        # --- Summary ---
+        click.echo(click.style("─" * 50, fg="blue"))
 
         if errors:
             click.echo(click.style(f"Errors ({len(errors)}):", fg="red", bold=True))
-            for error in errors:
-                click.echo(click.style("  ✗ ", fg="red") + error)
+            for category, msg, fix in errors:
+                click.echo(click.style(f"  ✗ [{category}] ", fg="red") + msg)
+                if fix:
+                    click.echo(click.style(f"    Fix: {fix}", fg="bright_black"))
             click.echo()
+
+        if warnings:
+            click.echo(click.style(f"Warnings ({len(warnings)}):", fg="yellow", bold=True))
+            for category, msg, fix in warnings:
+                click.echo(click.style(f"  ⚠ [{category}] ", fg="yellow") + msg)
+                if fix:
+                    click.echo(click.style(f"    Fix: {fix}", fg="bright_black"))
+            click.echo()
+
+        if errors:
             raise click.Abort()
 
         if strict and warnings:
             click.echo(
                 click.style(
-                    "✗ Validation failed (strict mode: warnings treated as errors)",
+                    "✗ Strict mode: warnings treated as errors",
                     fg="red",
                     bold=True,
                 )
             )
             raise click.Abort()
 
+        status_parts = []
+        if not errors and not warnings:
+            status_parts.append("no issues found")
+        elif warnings:
+            status_parts.append(f"{len(warnings)} warning(s)")
+
         click.echo(
             click.style("✓ ", fg="green", bold=True)
-            + click.style(f"Skill '{skill.name}' is valid!", fg="green")
+            + click.style(f"Skill '{skill.name}' is valid", fg="green")
+            + (f" ({', '.join(status_parts)})" if status_parts else "")
         )
 
     except FileNotFoundError as e:
-        click.echo(click.style("✗ ", fg="red") + f"Skill not found: {name}", err=True)
-        click.echo(click.style(f"  {str(e)}", fg="yellow"), err=True)
-        click.echo("\nRun 'sutras list' to see available skills")
-        raise click.Abort()
+        skill_not_found(name, str(e))
     except ValueError as e:
-        click.echo(click.style("✗ ", fg="red") + f"Invalid skill format: {str(e)}", err=True)
-        raise click.Abort()
+        invalid_skill(name, str(e))
     except Exception as e:
-        if "Validation failed" not in str(e):
-            click.echo(
-                click.style("✗ ", fg="red") + f"Error validating skill: {str(e)}",
-                err=True,
-            )
-        raise click.Abort()
+        if isinstance(e, (click.Abort, SystemExit)):
+            raise
+        operation_failed("Validation", str(e))
 
 
 @cli.command()
@@ -746,16 +895,9 @@ def docs(name: str, output: Path | None, no_supporting: bool) -> None:
             click.echo(content)
 
     except FileNotFoundError as e:
-        click.echo(click.style("✗ ", fg="red") + f"Skill not found: {name}", err=True)
-        click.echo(click.style(f"  {str(e)}", fg="yellow"), err=True)
-        click.echo("\nRun 'sutras list' to see available skills")
-        raise click.Abort()
+        skill_not_found(name, str(e))
     except Exception as e:
-        click.echo(
-            click.style("✗ ", fg="red") + f"Error generating docs: {str(e)}",
-            err=True,
-        )
-        raise click.Abort()
+        operation_failed("Generating docs", str(e))
 
 
 @cli.command()
@@ -771,8 +913,10 @@ def docs(name: str, output: Path | None, no_supporting: bool) -> None:
     is_flag=True,
     help="Skip validation before building",
 )
-def build(name: str, output: Path | None, no_validate: bool) -> None:
+@click.pass_context
+def build(ctx: click.Context, name: str, output: Path | None, no_validate: bool) -> None:
     """Build a distributable package for a skill."""
+    verbose = _verbose(ctx)
     loader = SkillLoader()
 
     try:
@@ -780,6 +924,13 @@ def build(name: str, output: Path | None, no_validate: bool) -> None:
         click.echo()
 
         skill = loader.load(name)
+
+        if verbose:
+            click.echo(click.style("Build configuration:", fg="bright_black"))
+            click.echo(click.style(f"  Source: {skill.path}", fg="bright_black"))
+            click.echo(click.style(f"  Output: {output or './dist'}", fg="bright_black"))
+            click.echo(click.style(f"  Validate: {not no_validate}", fg="bright_black"))
+            click.echo()
 
         builder = SkillBuilder(skill, output_dir=output)
 
@@ -796,9 +947,8 @@ def build(name: str, output: Path | None, no_validate: bool) -> None:
             click.echo(click.style("✓ Validation passed", fg="green"))
             click.echo()
 
-        click.echo(click.style("Packaging skill...", fg="blue"))
-
-        package_path = builder.build(validate=False)
+        with spinner("Packaging skill"):
+            package_path = builder.build(validate=False)
 
         package_size = package_path.stat().st_size
         size_str = f"{package_size:,} bytes"
@@ -830,16 +980,18 @@ def build(name: str, output: Path | None, no_validate: bool) -> None:
         click.echo("  - Publish to a skill registry (coming soon)")
 
     except FileNotFoundError as e:
-        click.echo(click.style("✗ ", fg="red") + f"Skill not found: {name}", err=True)
-        click.echo(click.style(f"  {str(e)}", fg="yellow"), err=True)
-        click.echo("\nRun 'sutras list' to see available skills")
-        raise click.Abort()
+        skill_not_found(name, str(e))
     except BuildError as e:
-        click.echo(click.style("✗ Build failed: ", fg="red") + str(e), err=True)
-        raise click.Abort()
+        operation_failed(
+            "Build",
+            str(e),
+            [
+                "Fix the errors above and try again",
+                f"Use {click.style('--no-validate', fg='cyan')} to skip validation",
+            ],
+        )
     except Exception as e:
-        click.echo(click.style("✗ ", fg="red") + f"Error building skill: {str(e)}", err=True)
-        raise click.Abort()
+        operation_failed("Building skill", str(e))
 
 
 @cli.group()
@@ -954,13 +1106,11 @@ def registry_update(name: str | None, update_all: bool) -> None:
         manager = RegistryManager()
 
         if update_all:
-            click.echo(click.style("Updating all registries...", fg="cyan"))
-            manager.update_all_registries()
-            click.echo(click.style("✓ ", fg="green") + "All registries updated")
+            with spinner("Updating all registries", "All registries updated"):
+                manager.update_all_registries()
         elif name:
-            click.echo(click.style(f"Updating registry: {name}", fg="cyan"))
-            manager.update_registry(name)
-            click.echo(click.style("✓ ", fg="green") + f"Updated registry: {name}")
+            with spinner(f"Updating registry: {name}", f"Updated registry: {name}"):
+                manager.update_registry(name)
         else:
             click.echo(
                 click.style("✗ ", fg="red") + "Specify a registry name or use --all", err=True
@@ -1003,7 +1153,8 @@ def registry_build_index(registry_path: Path, output: Path | None) -> None:
 @click.argument("source")
 @click.option("--version", "-v", help="Specific version (for registry installs)")
 @click.option("--registry", "-r", help="Registry to install from (for registry installs)")
-def install(source: str, version: str | None, registry: str | None) -> None:
+@click.pass_context
+def install(ctx: click.Context, source: str, version: str | None, registry: str | None) -> None:
     """Install a skill from various sources.
 
     SOURCE can be:
@@ -1023,9 +1174,20 @@ def install(source: str, version: str | None, registry: str | None) -> None:
     sutras install https://example.com/skills/skill-1.0.0.tar.gz
     sutras install ./dist/my-skill-1.0.0.tar.gz
     """
+    verbose = _verbose(ctx)
     try:
+        if verbose:
+            click.echo(click.style("Install details:", fg="bright_black"))
+            click.echo(click.style(f"  Source: {source}", fg="bright_black"))
+            if version:
+                click.echo(click.style(f"  Version: {version}", fg="bright_black"))
+            if registry:
+                click.echo(click.style(f"  Registry: {registry}", fg="bright_black"))
+            click.echo()
+
         installer = SkillInstaller()
-        installer.install(source, version, registry)
+        with spinner("Installing skill", f"Installed {source}"):
+            installer.install(source, version, registry)
 
         click.echo()
         click.echo(click.style("Next steps:", fg="yellow", bold=True))
@@ -1033,11 +1195,16 @@ def install(source: str, version: str | None, registry: str | None) -> None:
         click.echo(f"  - Run: {click.style('sutras list', fg='green')} to see installed skills")
 
     except ValueError as e:
-        click.echo(click.style("✗ ", fg="red") + str(e), err=True)
-        raise click.Abort()
+        operation_failed(
+            "Installation",
+            str(e),
+            [
+                f"Run {click.style('sutras install --help', fg='cyan')} for usage examples",
+                "Check the source format: @namespace/skill, github:user/repo, URL, or local path",
+            ],
+        )
     except Exception as e:
-        click.echo(click.style("✗ ", fg="red") + f"Installation failed: {str(e)}", err=True)
-        raise click.Abort()
+        operation_failed("Installation", str(e))
 
 
 @cli.command()
@@ -1050,11 +1217,15 @@ def uninstall(skill_name: str, version: str | None) -> None:
         installer.uninstall(skill_name, version)
 
     except ValueError as e:
-        click.echo(click.style("✗ ", fg="red") + str(e), err=True)
-        raise click.Abort()
+        operation_failed(
+            "Uninstall",
+            str(e),
+            [
+                f"Run {click.style('sutras list', fg='cyan')} to see installed skills",
+            ],
+        )
     except Exception as e:
-        click.echo(click.style("✗ ", fg="red") + f"Uninstallation failed: {str(e)}", err=True)
-        raise click.Abort()
+        operation_failed("Uninstall", str(e))
 
 
 @cli.command()
@@ -1066,14 +1237,20 @@ def publish(skill_path: Path, registry: str | None, pr: bool, build_dir: Path | 
     """Publish a skill to a registry."""
     try:
         publisher = SkillPublisher()
-        publisher.publish(skill_path, registry, pr, build_dir)
+        with spinner("Publishing skill"):
+            publisher.publish(skill_path, registry, pr, build_dir)
 
     except PublishError as e:
-        click.echo(click.style("✗ ", fg="red") + f"Publishing failed: {str(e)}", err=True)
-        raise click.Abort()
+        operation_failed(
+            "Publishing",
+            str(e),
+            [
+                f"Run {click.style('sutras registry list', fg='cyan')} to check registry config",
+                f"Run {click.style('sutras validate', fg='cyan')} to check skill validity",
+            ],
+        )
     except Exception as e:
-        click.echo(click.style("✗ ", fg="red") + f"Error during publishing: {str(e)}", err=True)
-        raise click.Abort()
+        operation_failed("Publishing", str(e))
 
 
 @cli.command()
@@ -1259,6 +1436,50 @@ def update(target_version: str | None, check: bool, skip_pi: bool, skip_skill: b
     else:
         click.echo(click.style("⚠ Some components could not be updated.", fg="yellow"))
         click.echo("  See errors above for details.")
+
+
+@cli.command()
+@click.argument("shell", type=click.Choice(["bash", "zsh", "fish"]))
+def completion(shell: str) -> None:
+    """Generate shell completion script.
+
+    Output a completion script for the given shell. Source it in your
+    shell profile to enable tab-completion for all sutras commands.
+
+    \b
+    Examples:
+      sutras completion bash >> ~/.bashrc
+      sutras completion zsh >> ~/.zshrc
+      sutras completion fish > ~/.config/fish/completions/sutras.fish
+    """
+    env_var = "_SUTRAS_COMPLETE"
+    shells = {
+        "bash": f"{env_var}=bash_source sutras",
+        "zsh": f"{env_var}=zsh_source sutras",
+        "fish": f"{env_var}=fish_source sutras",
+    }
+
+    import os
+    import subprocess
+
+    env = os.environ.copy()
+    env[env_var] = f"{shell}_source"
+    try:
+        result = subprocess.run(
+            ["sutras"],
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        if result.stdout:
+            click.echo(result.stdout)
+        else:
+            click.echo(result.stderr)
+    except FileNotFoundError:
+        # Fallback: emit manual instructions
+        click.echo(f"# Run the following to enable {shell} completion:")
+        click.echo(f'#   eval "$({shells[shell]})"')
+        click.echo(f'eval "$({shells[shell]})"')
 
 
 if __name__ == "__main__":

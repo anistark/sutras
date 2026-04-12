@@ -9,5 +9,13 @@
   "homepage": "https://anistark.github.io/sutras/",
   "repository": "https://github.com/anistark/sutras",
   "license": "MIT",
-  "keywords": ["skills", "agent", "devtools", "registry", "packaging", "scaffolding"]
+  "keywords": [
+    "commands",
+    "skills",
+    "agent",
+    "devtools",
+    "registry",
+    "packaging",
+    "scaffolding"
+  ]
 }

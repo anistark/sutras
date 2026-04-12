@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased](https://github.com/anistark/sutras/compare/v0.4.4...HEAD)
 
-...
+### Added
+- Global `--verbose` / `-v` flag on the top-level CLI for debug output across all commands
+- `sutras completion {bash|zsh|fish}` command — generates shell completion scripts
+- Progress spinners for long-running operations (install, build, publish, eval, registry update)
+- `AGENTS.md` — AI coding agent instructions for the project
+
+### Changed
+- Error messages across all commands now use a centralized handler with consistent formatting and actionable suggestions (e.g., "Run `sutras list`", "Run `sutras new <name>`")
+- `sutras validate` now reports categorized checks (Structure, ABI, Distribution, Testing) with per-issue `Fix:` suggestions and `[category]` tags
 
 ## [v0.4.4](https://github.com/anistark/sutras/compare/v0.4.3...v0.4.4) - 2026-04-09
 
