@@ -56,7 +56,7 @@ A single `main.py` file with all Click commands. The CLI is the only entry point
 | `sutras list` | List discovered skills (local and global) |
 | `sutras info <name>` | Show detailed skill information |
 | `sutras new <name>` | Scaffold a new skill from a template |
-| `sutras validate <name>` | Validate skill structure and ABI |
+| `sutras validate <name\|path>` | Validate skill structure and ABI; supports `--all` to validate every discovered skill (CI-friendly) and `--path <dir>` to override the skills directory |
 | `sutras test <name>` | Run test cases from `sutras.yaml` |
 | `sutras eval <name>` | Run evaluations (Ragas framework) |
 | `sutras docs <name>` | Generate documentation from skill metadata |

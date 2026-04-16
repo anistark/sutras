@@ -93,6 +93,7 @@ async function handleSkillCommand(command: string, args: string[], ctx: Extensio
 // ── AUTO-GENERATED:START ──
 	const SUBCOMMANDS: { value: string; label: string }[] = [
 		{ value: "build", label: "build — Build a distributable package for a skill." },
+		{ value: "completion", label: "completion — Generate shell completion script." },
 		{ value: "docs", label: "docs — Generate documentation for a skill." },
 		{ value: "eval", label: "eval — Evaluate a skill using configured metrics." },
 		{ value: "info", label: "info — Show detailed information about a skill." },

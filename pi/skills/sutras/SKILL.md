@@ -20,6 +20,9 @@ sutras build <name>
     --output/-o: Output directory for the package (default: ./dist)
     --no-validate (flag): Skip validation before building
 
+sutras completion <shell>
+    Generate shell completion script.
+
 sutras docs <name>
     Generate documentation for a skill.
     --output/-o: Output file or directory (default: print to stdout)
@@ -100,8 +103,10 @@ sutras update
     --skip-pi (flag): Skip updating the pi extension
     --skip-skill (flag): Skip refreshing the global skill (~/.claude/skills/sutras/)
 
-sutras validate <name>
+sutras validate [target]
     Validate a skill's structure and metadata.
+    --all (flag): Validate all skills discovered in the skills directory
+    --path: Skills directory to search (for --all), or a custom search path for a named skill
     --strict (flag): Enable strict validation (warnings become errors)
 ```
 

@@ -110,6 +110,13 @@ sutras validate my-skill
 
 # Strict mode (warnings become errors)
 sutras validate my-skill --strict
+
+# Validate a skill by directory path (useful outside .claude/skills/ layouts)
+sutras validate skills/my-skill
+
+# Validate every discovered skill (CI-friendly; exits non-zero on any failure)
+sutras validate --all
+sutras validate --all --path skills/
 ```
 
 ## CLI Reference
@@ -126,8 +133,11 @@ sutras list [--local/--no-local] [--global/--no-global]
 # Show skill details
 sutras info <name>
 
-# Validate skill
-sutras validate <name> [--strict]
+# Validate skill (accepts a skill name or a path to a skill directory)
+sutras validate <name|path> [--strict]
+
+# Validate every discovered skill (great for CI)
+sutras validate --all [--path DIR] [--strict]
 
 # Run tests
 sutras test <name> [--verbose] [--fail-fast]

@@ -5,17 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased](https://github.com/anistark/sutras/compare/v0.4.4...HEAD)
+## [Unreleased](https://github.com/anistark/sutras/compare/v0.4.5...HEAD)
+
+## [v0.4.5](https://github.com/anistark/sutras/compare/v0.4.4...v0.4.5) - 2026-04-16
 
 ### Added
 - Global `--verbose` / `-v` flag on the top-level CLI for debug output across all commands
 - `sutras completion {bash|zsh|fish}` command — generates shell completion scripts
 - Progress spinners for long-running operations (install, build, publish, eval, registry update)
 - `AGENTS.md` — AI coding agent instructions for the project
+- `sutras validate` now accepts a path to a skill directory (e.g. `sutras validate skills/my-skill`) in addition to a skill name
+- `sutras validate --all` validates every discovered skill in one run (non-zero exit if any fail), suitable for CI
+- `sutras validate --path <dir>` overrides the skills search directory, enabling validation for projects that don't use the default `.claude/skills/` layout (e.g. plugin repos with skills under `skills/`)
 
 ### Changed
 - Error messages across all commands now use a centralized handler with consistent formatting and actionable suggestions (e.g., "Run `sutras list`", "Run `sutras new <name>`")
 - `sutras validate` now reports categorized checks (Structure, ABI, Distribution, Testing) with per-issue `Fix:` suggestions and `[category]` tags
+
+### Fixed
+- Renamed the internal `list` command function to `list_skills` (external command `sutras list` unchanged) to stop shadowing the `list` builtin and fix `ty` type-check errors on annotations in `cli/main.py`
 
 ## [v0.4.4](https://github.com/anistark/sutras/compare/v0.4.3...v0.4.4) - 2026-04-09
 

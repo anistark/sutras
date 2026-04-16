@@ -5,7 +5,7 @@ from pathlib import Path
 
 import click
 
-from sutras import SkillLoader, __version__
+from sutras import Skill, SkillLoader, __version__
 from sutras.cli.errors import invalid_skill, operation_failed, skill_not_found
 from sutras.cli.progress import spinner
 from sutras.core.builder import BuildError, SkillBuilder
@@ -43,7 +43,7 @@ def cli(ctx: click.Context, verbose: bool) -> None:
     ctx.obj["verbose"] = verbose
 
 
-@cli.command()
+@cli.command(name="list")
 @click.option(
     "--local/--no-local",
     default=True,
@@ -56,7 +56,7 @@ def cli(ctx: click.Context, verbose: bool) -> None:
     help="Include global skills from ~/.claude/skills/",
 )
 @click.pass_context
-def list(ctx: click.Context, local: bool, global_: bool) -> None:
+def list_skills(ctx: click.Context, local: bool, global_: bool) -> None:
     """List available skills."""
     verbose = _verbose(ctx)
     try:
@@ -602,29 +602,14 @@ eval:
         operation_failed("Running evaluation", str(e))
 
 
-@cli.command()
-@click.argument("name")
-@click.option(
-    "--strict",
-    is_flag=True,
-    help="Enable strict validation (warnings become errors)",
-)
-@click.pass_context
-def validate(ctx: click.Context, name: str, strict: bool) -> None:
-    """Validate a skill's structure and metadata.
+def _run_validation_checks(skill: Skill, verbose: bool, strict: bool) -> tuple[int, int]:
+    """Run all validation checks on a skill and print results.
 
-    Checks SKILL.md structure, sutras.yaml schema, version format,
-    and distribution readiness. Use --strict to treat warnings as errors.
-
-    \b
-    Examples:
-      sutras validate my-skill
-      sutras validate my-skill --strict
+    Returns (error_count, warning_count). Does not raise on validation
+    failure — callers decide whether to abort.
     """
     import re
 
-    verbose = _verbose(ctx)
-    loader = SkillLoader()
     warnings: list[tuple[str, str, str | None]] = []  # (category, message, fix)
     errors: list[tuple[str, str, str | None]] = []  # (category, message, fix)
 
@@ -637,219 +622,321 @@ def validate(ctx: click.Context, name: str, strict: bool) -> None:
     def _err(category: str, msg: str, fix: str | None = None) -> None:
         errors.append((category, msg, fix))
 
-    try:
-        click.echo(click.style(f"Validating skill: {name}", fg="cyan", bold=True))
+    click.echo(click.style(f"Validating skill: {skill.name or '(unnamed)'}", fg="cyan", bold=True))
+    click.echo()
+
+    if verbose:
+        click.echo(click.style("  Path:", fg="bright_black") + f" {skill.path}")
         click.echo()
 
-        skill = loader.load(name)
+    # --- Structure checks ---
+    click.echo(click.style("Structure", fg="blue", bold=True))
 
-        if verbose:
-            click.echo(click.style("  Path:", fg="bright_black") + f" {skill.path}")
-            click.echo()
+    _ok("SKILL.md found and parsed")
 
-        # --- Structure checks ---
-        click.echo(click.style("Structure", fg="blue", bold=True))
-
-        _ok("SKILL.md found and parsed")
-
-        if not skill.name:
-            _err(
-                "structure",
-                "Missing 'name' in SKILL.md frontmatter",
-                "Add 'name: my-skill' to the YAML frontmatter",
-            )
-        else:
-            if not re.match(r"^[a-z0-9][a-z0-9._-]*$", skill.name):
-                _warn(
-                    "structure",
-                    f"Name '{skill.name}' uses non-standard characters",
-                    "Use lowercase alphanumeric, hyphens, underscores",
-                )
-            _ok(f"Name: {click.style(skill.name, fg='cyan')}")
-
-        if not skill.description:
-            _err(
-                "structure",
-                "Missing 'description' in SKILL.md frontmatter",
-                "Add 'description: ...' to the YAML frontmatter",
-            )
-        else:
-            desc_len = len(skill.description)
-            if desc_len < 20:
-                _warn(
-                    "structure",
-                    f"Description very short ({desc_len} chars)",
-                    "Write 20+ chars for Claude to understand the skill",
-                )
-            elif desc_len < 50:
-                _warn(
-                    "structure",
-                    f"Description is short ({desc_len} chars)",
-                    "Recommend 50+ chars for better Claude discovery",
-                )
-            _ok(f"Description ({desc_len} chars)")
-
-        if not skill.instructions or len(skill.instructions.strip()) < 10:
+    if not skill.name:
+        _err(
+            "structure",
+            "Missing 'name' in SKILL.md frontmatter",
+            "Add 'name: my-skill' to the YAML frontmatter",
+        )
+    else:
+        if not re.match(r"^[a-z0-9][a-z0-9._-]*$", skill.name):
             _warn(
                 "structure",
-                "SKILL.md instructions body is empty or very short",
-                "Add detailed instructions after the frontmatter",
+                f"Name '{skill.name}' uses non-standard characters",
+                "Use lowercase alphanumeric, hyphens, underscores",
             )
+        _ok(f"Name: {click.style(skill.name, fg='cyan')}")
 
-        if skill.allowed_tools:
-            _ok(f"Allowed tools: {', '.join(skill.allowed_tools)}")
+    if not skill.description:
+        _err(
+            "structure",
+            "Missing 'description' in SKILL.md frontmatter",
+            "Add 'description: ...' to the YAML frontmatter",
+        )
+    else:
+        desc_len = len(skill.description)
+        if desc_len < 20:
+            _warn(
+                "structure",
+                f"Description very short ({desc_len} chars)",
+                "Write 20+ chars for Claude to understand the skill",
+            )
+        elif desc_len < 50:
+            _warn(
+                "structure",
+                f"Description is short ({desc_len} chars)",
+                "Recommend 50+ chars for better Claude discovery",
+            )
+        _ok(f"Description ({desc_len} chars)")
 
-        if skill.supporting_files:
-            _ok(f"{len(skill.supporting_files)} supporting file(s)")
+    if not skill.instructions or len(skill.instructions.strip()) < 10:
+        _warn(
+            "structure",
+            "SKILL.md instructions body is empty or very short",
+            "Add detailed instructions after the frontmatter",
+        )
 
-        click.echo()
+    if skill.allowed_tools:
+        _ok(f"Allowed tools: {', '.join(skill.allowed_tools)}")
 
-        # --- ABI checks ---
-        click.echo(click.style("ABI (sutras.yaml)", fg="blue", bold=True))
+    if skill.supporting_files:
+        _ok(f"{len(skill.supporting_files)} supporting file(s)")
 
-        if skill.abi:
-            _ok("sutras.yaml found and parsed")
+    click.echo()
 
-            if not skill.abi.version:
-                _err("abi", "Missing 'version' field", "Add 'version: \"0.1.0\"' to sutras.yaml")
-            else:
-                if not re.match(r"^\d+\.\d+\.\d+", skill.abi.version):
-                    _err(
-                        "abi",
-                        f"Version '{skill.abi.version}' is not valid semver",
-                        "Use format: MAJOR.MINOR.PATCH (e.g., 1.0.0)",
-                    )
-                else:
-                    _ok(f"Version: {click.style(skill.abi.version, fg='blue')}")
+    # --- ABI checks ---
+    click.echo(click.style("ABI (sutras.yaml)", fg="blue", bold=True))
 
-            if not skill.abi.author:
-                _warn(
+    if skill.abi:
+        _ok("sutras.yaml found and parsed")
+
+        if not skill.abi.version:
+            _err("abi", "Missing 'version' field", "Add 'version: \"0.1.0\"' to sutras.yaml")
+        else:
+            if not re.match(r"^\d+\.\d+\.\d+", skill.abi.version):
+                _err(
                     "abi",
-                    "Missing 'author' field",
-                    "Add 'author: \"Your Name\"' to sutras.yaml",
+                    f"Version '{skill.abi.version}' is not valid semver",
+                    "Use format: MAJOR.MINOR.PATCH (e.g., 1.0.0)",
                 )
             else:
-                _ok(f"Author: {skill.abi.author}")
+                _ok(f"Version: {click.style(skill.abi.version, fg='blue')}")
 
-            if not skill.abi.license:
-                _warn("abi", "Missing 'license' field", "Add 'license: \"MIT\"' to sutras.yaml")
-            else:
-                _ok(f"License: {skill.abi.license}")
-
-            if skill.abi.repository:
-                _ok(f"Repository: {skill.abi.repository}")
-        else:
+        if not skill.abi.author:
             _warn(
                 "abi",
-                "No sutras.yaml found",
-                "Create sutras.yaml for version, testing, and distribution",
-            )
-
-        click.echo()
-
-        # --- Distribution readiness ---
-        click.echo(click.style("Distribution", fg="blue", bold=True))
-
-        if skill.abi and skill.abi.distribution:
-            dist = skill.abi.distribution
-            if dist.tags:
-                _ok(f"Tags: {', '.join(dist.tags)}")
-            else:
-                _warn(
-                    "distribution",
-                    "No tags specified",
-                    "Add tags for better skill discoverability",
-                )
-
-            if dist.category:
-                _ok(f"Category: {dist.category}")
-            else:
-                _warn(
-                    "distribution",
-                    "No category specified",
-                    "Add a category to help organize the skill",
-                )
-
-            if dist.homepage:
-                _ok(f"Homepage: {dist.homepage}")
-            if dist.keywords:
-                _ok(f"Keywords: {', '.join(dist.keywords)}")
-        elif skill.abi:
-            _warn(
-                "distribution",
-                "No distribution metadata",
-                "Add a 'distribution' section with tags and category",
+                "Missing 'author' field",
+                "Add 'author: \"Your Name\"' to sutras.yaml",
             )
         else:
-            click.echo(click.style("  ·", fg="bright_black") + " Skipped (no sutras.yaml)")
+            _ok(f"Author: {skill.abi.author}")
 
+        if not skill.abi.license:
+            _warn("abi", "Missing 'license' field", "Add 'license: \"MIT\"' to sutras.yaml")
+        else:
+            _ok(f"License: {skill.abi.license}")
+
+        if skill.abi.repository:
+            _ok(f"Repository: {skill.abi.repository}")
+    else:
+        _warn(
+            "abi",
+            "No sutras.yaml found",
+            "Create sutras.yaml for version, testing, and distribution",
+        )
+
+    click.echo()
+
+    # --- Distribution readiness ---
+    click.echo(click.style("Distribution", fg="blue", bold=True))
+
+    if skill.abi and skill.abi.distribution:
+        dist = skill.abi.distribution
+        if dist.tags:
+            _ok(f"Tags: {', '.join(dist.tags)}")
+        else:
+            _warn(
+                "distribution",
+                "No tags specified",
+                "Add tags for better skill discoverability",
+            )
+
+        if dist.category:
+            _ok(f"Category: {dist.category}")
+        else:
+            _warn(
+                "distribution",
+                "No category specified",
+                "Add a category to help organize the skill",
+            )
+
+        if dist.homepage:
+            _ok(f"Homepage: {dist.homepage}")
+        if dist.keywords:
+            _ok(f"Keywords: {', '.join(dist.keywords)}")
+    elif skill.abi:
+        _warn(
+            "distribution",
+            "No distribution metadata",
+            "Add a 'distribution' section with tags and category",
+        )
+    else:
+        click.echo(click.style("  ·", fg="bright_black") + " Skipped (no sutras.yaml)")
+
+    click.echo()
+
+    # --- Testing config ---
+    if verbose:
+        click.echo(click.style("Testing", fg="blue", bold=True))
+        if skill.abi and skill.abi.tests and skill.abi.tests.cases:
+            _ok(f"{len(skill.abi.tests.cases)} test case(s) defined")
+        else:
+            _warn(
+                "testing",
+                "No test cases defined",
+                "Add test cases in the 'tests' section of sutras.yaml",
+            )
         click.echo()
 
-        # --- Testing config ---
-        if verbose:
-            click.echo(click.style("Testing", fg="blue", bold=True))
-            if skill.abi and skill.abi.tests and skill.abi.tests.cases:
-                _ok(f"{len(skill.abi.tests.cases)} test case(s) defined")
-            else:
-                _warn(
-                    "testing",
-                    "No test cases defined",
-                    "Add test cases in the 'tests' section of sutras.yaml",
-                )
-            click.echo()
+    # --- Per-skill summary ---
+    click.echo(click.style("─" * 50, fg="blue"))
 
-        # --- Summary ---
-        click.echo(click.style("─" * 50, fg="blue"))
+    if errors:
+        click.echo(click.style(f"Errors ({len(errors)}):", fg="red", bold=True))
+        for category, msg, fix in errors:
+            click.echo(click.style(f"  ✗ [{category}] ", fg="red") + msg)
+            if fix:
+                click.echo(click.style(f"    Fix: {fix}", fg="bright_black"))
+        click.echo()
 
-        if errors:
-            click.echo(click.style(f"Errors ({len(errors)}):", fg="red", bold=True))
-            for category, msg, fix in errors:
-                click.echo(click.style(f"  ✗ [{category}] ", fg="red") + msg)
-                if fix:
-                    click.echo(click.style(f"    Fix: {fix}", fg="bright_black"))
-            click.echo()
+    if warnings:
+        click.echo(click.style(f"Warnings ({len(warnings)}):", fg="yellow", bold=True))
+        for category, msg, fix in warnings:
+            click.echo(click.style(f"  ⚠ [{category}] ", fg="yellow") + msg)
+            if fix:
+                click.echo(click.style(f"    Fix: {fix}", fg="bright_black"))
+        click.echo()
 
-        if warnings:
-            click.echo(click.style(f"Warnings ({len(warnings)}):", fg="yellow", bold=True))
-            for category, msg, fix in warnings:
-                click.echo(click.style(f"  ⚠ [{category}] ", fg="yellow") + msg)
-                if fix:
-                    click.echo(click.style(f"    Fix: {fix}", fg="bright_black"))
-            click.echo()
-
-        if errors:
-            raise click.Abort()
-
-        if strict and warnings:
-            click.echo(
-                click.style(
-                    "✗ Strict mode: warnings treated as errors",
-                    fg="red",
-                    bold=True,
-                )
-            )
-            raise click.Abort()
-
+    if errors:
+        click.echo(
+            click.style("✗ ", fg="red", bold=True)
+            + click.style(f"Skill '{skill.name}' has errors", fg="red")
+        )
+    elif strict and warnings:
+        click.echo(
+            click.style("✗ ", fg="red", bold=True)
+            + click.style(f"Skill '{skill.name}' has warnings (strict mode)", fg="red")
+        )
+    else:
         status_parts = []
-        if not errors and not warnings:
+        if not warnings:
             status_parts.append("no issues found")
-        elif warnings:
+        else:
             status_parts.append(f"{len(warnings)} warning(s)")
-
         click.echo(
             click.style("✓ ", fg="green", bold=True)
             + click.style(f"Skill '{skill.name}' is valid", fg="green")
-            + (f" ({', '.join(status_parts)})" if status_parts else "")
+            + f" ({', '.join(status_parts)})"
         )
 
+    return len(errors), len(warnings)
+
+
+@cli.command()
+@click.argument("target", required=False, metavar="[NAME|PATH]")
+@click.option(
+    "--all",
+    "all_",
+    is_flag=True,
+    help="Validate all skills discovered in the skills directory",
+)
+@click.option(
+    "--path",
+    "skills_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    help="Skills directory to search (for --all), or a custom search path for a named skill",
+)
+@click.option(
+    "--strict",
+    is_flag=True,
+    help="Enable strict validation (warnings become errors)",
+)
+@click.pass_context
+def validate(
+    ctx: click.Context,
+    target: str | None,
+    all_: bool,
+    skills_path: Path | None,
+    strict: bool,
+) -> None:
+    """Validate a skill's structure and metadata.
+
+    Accepts a skill name, a path to a skill directory, or --all to validate
+    every discovered skill. Checks SKILL.md structure, sutras.yaml schema,
+    version format, and distribution readiness.
+
+    \b
+    Examples:
+      sutras validate my-skill
+      sutras validate skills/my-skill
+      sutras validate --all
+      sutras validate --all --path skills/
+      sutras validate my-skill --strict
+    """
+    verbose = _verbose(ctx)
+
+    skills_to_check: list[Skill] = []
+
+    try:
+        if all_:
+            if target:
+                raise click.UsageError("Cannot combine --all with a skill name or path")
+            if skills_path:
+                loader = SkillLoader(
+                    search_paths=[skills_path],
+                    include_global=False,
+                    include_project=False,
+                )
+            else:
+                loader = SkillLoader()
+            for name in loader.discover():
+                skills_to_check.append(loader.load(name))
+            if not skills_to_check:
+                click.echo(click.style("No skills found to validate.", fg="yellow", bold=True))
+                return
+        elif target:
+            target_path = Path(target)
+            if target_path.is_dir() and (target_path / "SKILL.md").exists():
+                skills_to_check.append(Skill.load(target_path))
+            else:
+                if skills_path:
+                    loader = SkillLoader(
+                        search_paths=[skills_path],
+                        include_global=False,
+                        include_project=False,
+                    )
+                else:
+                    loader = SkillLoader()
+                skills_to_check.append(loader.load(target))
+        else:
+            raise click.UsageError("Provide a skill name, a path, or use --all")
     except FileNotFoundError as e:
-        skill_not_found(name, str(e))
+        skill_not_found(target or "(none)", str(e))
     except ValueError as e:
-        invalid_skill(name, str(e))
-    except Exception as e:
-        if isinstance(e, (click.Abort, SystemExit)):
-            raise
-        operation_failed("Validation", str(e))
+        invalid_skill(target or "(none)", str(e))
+
+    total_errors = 0
+    total_warnings = 0
+    failed: list[str] = []
+
+    for i, skill in enumerate(skills_to_check):
+        if i > 0:
+            click.echo()
+        errs, warns = _run_validation_checks(skill, verbose, strict)
+        total_errors += errs
+        total_warnings += warns
+        if errs > 0 or (strict and warns > 0):
+            failed.append(skill.name or str(skill.path))
+
+    # Aggregate summary when validating multiple skills
+    if len(skills_to_check) > 1:
+        click.echo()
+        click.echo(click.style("═" * 50, fg="blue"))
+        passed = len(skills_to_check) - len(failed)
+        parts = [click.style(f"{passed} passed", fg="green")]
+        if failed:
+            parts.append(click.style(f"{len(failed)} failed", fg="red"))
+        click.echo(
+            click.style(f"Validated {len(skills_to_check)} skill(s): ", bold=True)
+            + ", ".join(parts)
+        )
+        if failed:
+            click.echo(click.style("  Failed: ", fg="red") + ", ".join(failed))
+
+    if failed:
+        raise click.Abort()
 
 
 @cli.command()

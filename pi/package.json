@@ -1,7 +1,7 @@
 {
   "name": "sutras",
-  "version": "0.4.4",
-  "description": "Skill development toolkit for pi — /sutras commands + agent skill",
+  "version": "0.4.5",
+  "description": "Skill development toolkit for pi \u2014 /sutras commands + agent skill",
   "keywords": [
     "pi-package",
     "skills",
