@@ -69,8 +69,23 @@ check-versions:
     fi
     echo "✓ Versions in sync: $pypi_ver"
 
-# Publish everything (PyPI + npm)
-publish: check-versions publish-pypi publish-npm
+# Tag current version and push tag to origin
+tag:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ver=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+    tag="v$ver"
+    if git rev-parse "$tag" >/dev/null 2>&1; then
+        echo "⚠  Tag $tag already exists locally, skipping create"
+    else
+        echo "🏷  Tagging $tag"
+        git tag -a "$tag" -m "Release $tag"
+    fi
+    echo "⬆  Pushing $tag to origin"
+    git push origin "$tag"
+
+# Publish everything (PyPI + npm + git tag)
+publish: check-versions publish-pypi publish-npm tag
 
 # Publish CLI to PyPI (requires credentials in ~/.pypirc)
 publish-pypi: clean build

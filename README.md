@@ -119,6 +119,38 @@ sutras validate --all
 sutras validate --all --path skills/
 ```
 
+### Validate in GitHub Actions
+
+Sutras ships a reusable GitHub Action so you can validate skills on every push or pull request without installing anything:
+
+```yaml
+# .github/workflows/validate-skills.yml
+name: Validate Skills
+on: [push, pull_request]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: anistark/sutras@v0.4.5
+        with:
+          path: skills/
+          strict: true
+```
+
+Inputs:
+
+| Input     | Description                                                   | Default |
+| --------- | ------------------------------------------------------------- | ------- |
+| `path`    | Skills directory to validate                                  | `.`     |
+| `skill`   | Validate a single skill by name or path (omit for all skills) | —       |
+| `strict`  | Treat warnings as errors                                      | `false` |
+| `version` | Pin a specific sutras version (e.g. `0.4.5`)                  | latest  |
+| `verbose` | Enable verbose output                                         | `false` |
+
+Pin to a major tag (`@v0`) for automatic patch updates, or to an exact release (`@v0.4.5`) for full reproducibility.
+
 ## CLI Reference
 
 ### Skill Development

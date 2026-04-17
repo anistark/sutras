@@ -1,0 +1,73 @@
+name: 'Sutras Validate'
+description: 'Validate Anthropic Agent Skills with sutras'
+author: 'Kumar Anirudha'
+branding:
+  icon: 'check-circle'
+  color: 'blue'
+
+inputs:
+  path:
+    description: 'Skills directory to validate (passed to --path)'
+    required: false
+    default: '.'
+  skill:
+    description: 'Validate a single skill by name or path (omit to validate all)'
+    required: false
+    default: ''
+  strict:
+    description: 'Treat warnings as errors'
+    required: false
+    default: 'false'
+  version:
+    description: 'Pin sutras version (e.g. 0.4.5). Defaults to latest on PyPI.'
+    required: false
+    default: ''
+  verbose:
+    description: 'Enable verbose output'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: true
+
+    - name: Run sutras validate
+      shell: bash
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_SKILL: ${{ inputs.skill }}
+        INPUT_STRICT: ${{ inputs.strict }}
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_VERBOSE: ${{ inputs.verbose }}
+      run: |
+        set -euo pipefail
+
+        pkg="sutras"
+        if [[ -n "$INPUT_VERSION" ]]; then
+          pkg="sutras==$INPUT_VERSION"
+        fi
+
+        args=()
+        if [[ "$INPUT_VERBOSE" == "true" ]]; then
+          args+=(--verbose)
+        fi
+        args+=(validate)
+
+        if [[ -n "$INPUT_SKILL" ]]; then
+          args+=("$INPUT_SKILL")
+          if [[ -n "$INPUT_PATH" && "$INPUT_PATH" != "." ]]; then
+            args+=(--path "$INPUT_PATH")
+          fi
+        else
+          args+=(--all --path "$INPUT_PATH")
+        fi
+
+        if [[ "$INPUT_STRICT" == "true" ]]; then
+          args+=(--strict)
+        fi
+
+        uvx --from "$pkg" sutras "${args[@]}"

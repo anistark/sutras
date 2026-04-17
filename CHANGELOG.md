@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased](https://github.com/anistark/sutras/compare/v0.4.5...HEAD)
 
+### Added
+- GitHub Action (`action.yml` at repo root) — composite action wrapping `sutras validate` for use in GitHub Actions workflows; supports `path`, `skill`, `strict`, `version`, and `verbose` inputs
+- `just tag` recipe — creates an annotated `v<version>` git tag from `pyproject.toml` and pushes it to `origin`
+
+### Changed
+- `just publish` now chains `just tag` after PyPI and npm publishes, so a successful release always lands a matching git tag
+
 ## [v0.4.5](https://github.com/anistark/sutras/compare/v0.4.4...v0.4.5) - 2026-04-16
 
 ### Added
