@@ -43,6 +43,7 @@ The engine — models, loaders, runners, and managers. All business logic lives 
 | `resolver.py` | `DependencyResolver` — recursive dependency resolution with conflict detection |
 | `lockfile.py` | `.sutras.lock` format — lock file for reproducible installs |
 | `docgen.py` | Documentation generation from skill metadata |
+| `validation.py` | Limits, known tool names, and link extraction used by `sutras validate` |
 | `updater.py` | Self-update logic — checks PyPI, upgrades CLI, refreshes pi extension |
 
 ### 2. CLI Layer (`src/sutras/cli/main.py`)

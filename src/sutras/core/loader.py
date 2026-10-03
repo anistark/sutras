@@ -62,6 +62,24 @@ class SkillLoader:
 
         return sorted(discovered)
 
+    def find_path(self, name: str) -> Path | None:
+        """
+        Locate a skill directory by name without loading it.
+
+        Search paths are checked in order; the first match wins.
+
+        Args:
+            name: Name of the skill to find
+
+        Returns:
+            Path to the skill directory, or None if not found
+        """
+        for search_path in self.search_paths:
+            candidate = search_path / name
+            if candidate.exists() and (candidate / "SKILL.md").exists():
+                return candidate
+        return None
+
     def load(self, name: str) -> Skill:
         """
         Load a skill by name.
@@ -80,14 +98,7 @@ class SkillLoader:
         if name in self._loaded_skills:
             return self._loaded_skills[name]
 
-        # Search for the skill
-        skill_path = None
-        for search_path in self.search_paths:
-            candidate = search_path / name
-            if candidate.exists() and (candidate / "SKILL.md").exists():
-                skill_path = candidate
-                break
-
+        skill_path = self.find_path(name)
         if not skill_path:
             raise FileNotFoundError(
                 f"Skill '{name}' not found in search paths: {self.search_paths}"

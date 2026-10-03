@@ -6,8 +6,34 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from pydantic import ValidationError
 
 from sutras.core.abi import SutrasABI
+
+
+def _describe_yaml_error(error: yaml.YAMLError) -> str:
+    """Condense a PyYAML error into a single line with its position."""
+    if isinstance(error, yaml.MarkedYAMLError) and error.problem_mark is not None:
+        mark = error.problem_mark
+        return f"{error.problem} (line {mark.line + 1}, column {mark.column + 1})"
+    return str(error).splitlines()[0]
+
+
+class SkillLoadError(ValueError):
+    """Raised when a skill file exists but cannot be parsed.
+
+    Subclasses ValueError so existing callers keep working, while exposing
+    structured detail for diagnostics such as ``sutras validate``.
+
+    Attributes:
+        file: Name of the file that failed to load (e.g. "SKILL.md", "sutras.yaml")
+        problems: Individual problems found in that file
+    """
+
+    def __init__(self, file: str, problems: list[str]):
+        self.file = file
+        self.problems = problems
+        super().__init__(f"{file}: " + "; ".join(problems))
 
 
 @dataclass
@@ -29,9 +55,11 @@ class SkillMetadata:
             elif isinstance(allowed_tools, list):
                 allowed_tools = [str(t) for t in allowed_tools]
 
+        name = frontmatter.get("name")
+        description = frontmatter.get("description")
         return cls(
-            name=frontmatter.get("name", ""),
-            description=frontmatter.get("description", ""),
+            name="" if name is None else str(name),
+            description="" if description is None else str(description),
             allowed_tools=allowed_tools,
         )
 
@@ -89,26 +117,26 @@ class Skill:
 
         Raises:
             FileNotFoundError: If SKILL.md doesn't exist
-            ValueError: If SKILL.md is malformed
+            SkillLoadError: If SKILL.md or sutras.yaml is malformed
         """
         skill_md = skill_path / "SKILL.md"
         if not skill_md.exists():
             raise FileNotFoundError(f"SKILL.md not found in {skill_path}")
 
         # Parse SKILL.md
-        content = skill_md.read_text()
+        try:
+            content = skill_md.read_text()
+        except UnicodeDecodeError as e:
+            raise SkillLoadError("SKILL.md", [f"File is not valid UTF-8 text: {e}"]) from e
         metadata, instructions = cls._parse_skill_md(content)
 
         # Load sutras.yaml if present (also check ability.yaml for backward compatibility)
         abi = None
-        sutras_yaml = skill_path / "sutras.yaml"
-        ability_yaml = skill_path / "ability.yaml"
-        if sutras_yaml.exists():
-            abi_data = yaml.safe_load(sutras_yaml.read_text())
-            abi = SutrasABI(**abi_data)
-        elif ability_yaml.exists():
-            abi_data = yaml.safe_load(ability_yaml.read_text())
-            abi = SutrasABI(**abi_data)
+        for abi_name in ("sutras.yaml", "ability.yaml"):
+            abi_file = skill_path / abi_name
+            if abi_file.exists():
+                abi = cls._parse_abi(abi_file)
+                break
 
         # Discover supporting files
         supporting_files = {}
@@ -129,6 +157,35 @@ class Skill:
         )
 
     @staticmethod
+    def _parse_abi(abi_file: Path) -> SutrasABI:
+        """Parse and validate a sutras.yaml (or legacy ability.yaml) file.
+
+        Raises:
+            SkillLoadError: If the file is not valid YAML, is not a mapping,
+                or does not match the SutrasABI schema
+        """
+        try:
+            abi_data = yaml.safe_load(abi_file.read_text())
+        except UnicodeDecodeError as e:
+            raise SkillLoadError(abi_file.name, [f"File is not valid UTF-8 text: {e}"]) from e
+        except yaml.YAMLError as e:
+            raise SkillLoadError(abi_file.name, [f"Invalid YAML: {_describe_yaml_error(e)}"]) from e
+
+        if abi_data is None:
+            raise SkillLoadError(abi_file.name, ["File is empty"])
+        if not isinstance(abi_data, dict):
+            raise SkillLoadError(abi_file.name, ["Top level must be a YAML mapping"])
+
+        try:
+            return SutrasABI(**abi_data)
+        except ValidationError as e:
+            problems = [
+                f"'{'.'.join(str(p) for p in err['loc']) or '(root)'}': {err['msg']}"
+                for err in e.errors()
+            ]
+            raise SkillLoadError(abi_file.name, problems) from e
+
+    @staticmethod
     def _parse_skill_md(content: str) -> tuple[SkillMetadata, str]:
         """Parse SKILL.md content into metadata and instructions.
 
@@ -139,14 +196,14 @@ class Skill:
             Tuple of (SkillMetadata, instructions)
 
         Raises:
-            ValueError: If frontmatter is missing or malformed
+            SkillLoadError: If frontmatter is missing or malformed
         """
         # Match YAML frontmatter
         frontmatter_pattern = r"^---\s*\n(.*?)\n---\s*\n(.*)$"
         match = re.match(frontmatter_pattern, content, re.DOTALL)
 
         if not match:
-            raise ValueError("SKILL.md must contain YAML frontmatter (---...---)")
+            raise SkillLoadError("SKILL.md", ["File must contain YAML frontmatter (---...---)"])
 
         frontmatter_text = match.group(1)
         instructions = match.group(2).strip()
@@ -155,16 +212,20 @@ class Skill:
         try:
             frontmatter = yaml.safe_load(frontmatter_text)
         except yaml.YAMLError as e:
-            raise ValueError(f"Invalid YAML frontmatter: {e}") from e
+            raise SkillLoadError(
+                "SKILL.md", [f"Invalid YAML frontmatter: {_describe_yaml_error(e)}"]
+            ) from e
 
         if not isinstance(frontmatter, dict):
-            raise ValueError("YAML frontmatter must be a dictionary")
+            raise SkillLoadError("SKILL.md", ["YAML frontmatter must be a mapping"])
 
-        # Validate required fields
-        if "name" not in frontmatter:
-            raise ValueError("SKILL.md frontmatter must include 'name' field")
-        if "description" not in frontmatter:
-            raise ValueError("SKILL.md frontmatter must include 'description' field")
+        missing = [
+            f"Frontmatter must include '{key}' field"
+            for key in ("name", "description")
+            if key not in frontmatter
+        ]
+        if missing:
+            raise SkillLoadError("SKILL.md", missing)
 
         metadata = SkillMetadata.from_frontmatter(frontmatter)
         return metadata, instructions

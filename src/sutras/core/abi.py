@@ -22,7 +22,7 @@ class CapabilitiesConfig(BaseModel):
     """Capability declarations for a skill."""
 
     tools: list[str] = Field(default_factory=list, description="Required tools")
-    dependencies: list[str] | list[DependencyConfig] = Field(
+    dependencies: list[str | DependencyConfig] = Field(
         default_factory=list, description="Skill dependencies (strings or DependencyConfig)"
     )
     constraints: dict[str, Any] = Field(default_factory=dict, description="Runtime constraints")

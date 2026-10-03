@@ -10,9 +10,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - GitHub Action (`action.yml` at repo root) — composite action wrapping `sutras validate` for use in GitHub Actions workflows; supports `path`, `skill`, `strict`, `version`, and `verbose` inputs
 - `just tag` recipe — creates an annotated `v<version>` git tag from `pyproject.toml` and pushes it to `origin`
+- `sutras validate` checks Agent Skills spec limits (name ≤ 64 chars, description ≤ 1024 chars) and warns when the skill name doesn't match its directory
+- `sutras validate` warns on unknown or malformed `allowed-tools` / `capabilities.tools` entries (supports `Tool(pattern)` and `mcp__*` tools)
+- `sutras validate` checks dependency names (must be `@namespace/name`) and version constraints
+- `sutras validate` flags SKILL.md links to missing files, files outside the skill directory, and files `sutras build` won't package (subdirectories)
+- `sutras validate` checks that `eval.dataset` and an explicitly set `tests.fixtures_dir` exist
 
 ### Changed
 - `just publish` now chains `just tag` after PyPI and npm publishes, so a successful release always lands a matching git tag
+- `sutras validate` reports unparseable `SKILL.md`/`sutras.yaml` as categorized errors in the normal report (one per problem, e.g. each schema field) instead of aborting
+- `sutras validate --all` keeps going past broken skills and counts them as failed in the summary
+- Version check now uses the semver parser: rejects trailing junk (`1.0.0garbage`), `v` prefixes and leading zeros; accepts prereleases (`1.0.0-beta.1`)
+
+### Fixed
+- Invalid or empty `sutras.yaml` crashed skill loading with an uncaught YAML/`TypeError`; now raises `SkillLoadError` (a `ValueError`) with a one-line message
+- Missing `license` warning never fired because the schema defaults to MIT; it now checks whether the field was set explicitly
+- Non-string `name`/`description` in `SKILL.md` frontmatter (e.g. `name: 123`) crashed validation
+- Scoped skill names (`@namespace/skill`) no longer trigger a "non-standard characters" warning
+- `capabilities.dependencies` rejected lists mixing plain strings and `{name, version}` entries, which the installer already supports
+- `sutras build` crashed with a JSON serialization error for skills with `{name, version}` dependencies
 
 ## [v0.4.5](https://github.com/anistark/sutras/compare/v0.4.4...v0.4.5) - 2026-04-16
 

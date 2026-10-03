@@ -13,9 +13,19 @@ from sutras.core.config import SutrasConfig
 from sutras.core.docgen import generate_docs, write_docs
 from sutras.core.evaluator import Evaluator
 from sutras.core.installer import SkillInstaller
+from sutras.core.naming import SkillName
 from sutras.core.publisher import PublishError, SkillPublisher
 from sutras.core.registry import RegistryManager
+from sutras.core.semver import Version, VersionRange
+from sutras.core.skill import SkillLoadError
 from sutras.core.test_runner import TestRunner
+from sutras.core.validation import (
+    MAX_DESCRIPTION_LENGTH,
+    MAX_NAME_LENGTH,
+    extract_file_references,
+    is_known_tool,
+    parse_tool_entry,
+)
 
 
 def _verbose(ctx: click.Context) -> bool:
@@ -602,12 +612,105 @@ eval:
         operation_failed("Running evaluation", str(e))
 
 
+def _is_valid_semver(version: str) -> bool:
+    """Check that a version string is canonical semver (MAJOR.MINOR.PATCH[-prerelease])."""
+    try:
+        return str(Version.parse(version)) == version
+    except ValueError:
+        return False
+
+
+def _print_validation_summary(
+    name: str,
+    errors: list[tuple[str, str, str | None]],
+    warnings: list[tuple[str, str, str | None]],
+    strict: bool,
+) -> None:
+    """Print the per-skill error/warning list and the final status line."""
+    click.echo(click.style("─" * 50, fg="blue"))
+
+    if errors:
+        click.echo(click.style(f"Errors ({len(errors)}):", fg="red", bold=True))
+        for category, msg, fix in errors:
+            click.echo(click.style(f"  ✗ [{category}] ", fg="red") + msg)
+            if fix:
+                click.echo(click.style(f"    Fix: {fix}", fg="bright_black"))
+        click.echo()
+
+    if warnings:
+        click.echo(click.style(f"Warnings ({len(warnings)}):", fg="yellow", bold=True))
+        for category, msg, fix in warnings:
+            click.echo(click.style(f"  ⚠ [{category}] ", fg="yellow") + msg)
+            if fix:
+                click.echo(click.style(f"    Fix: {fix}", fg="bright_black"))
+        click.echo()
+
+    if errors:
+        click.echo(
+            click.style("✗ ", fg="red", bold=True)
+            + click.style(f"Skill '{name}' has errors", fg="red")
+        )
+    elif strict and warnings:
+        click.echo(
+            click.style("✗ ", fg="red", bold=True)
+            + click.style(f"Skill '{name}' has warnings (strict mode)", fg="red")
+        )
+    else:
+        status_parts = []
+        if not warnings:
+            status_parts.append("no issues found")
+        else:
+            status_parts.append(f"{len(warnings)} warning(s)")
+        click.echo(
+            click.style("✓ ", fg="green", bold=True)
+            + click.style(f"Skill '{name}' is valid", fg="green")
+            + f" ({', '.join(status_parts)})"
+        )
+
+
+def _report_load_failure(
+    label: str, path: Path, error: SkillLoadError, verbose: bool, strict: bool
+) -> tuple[int, int]:
+    """Report a skill whose SKILL.md or sutras.yaml could not be parsed.
+
+    Each parse problem is reported as a separate error so broken skills show
+    up in the same report format as other validation failures.
+
+    Returns (error_count, warning_count).
+    """
+    click.echo(click.style(f"Validating skill: {label}", fg="cyan", bold=True))
+    click.echo()
+
+    if verbose:
+        click.echo(click.style("  Path:", fg="bright_black") + f" {path}")
+        click.echo()
+
+    if error.file == "SKILL.md":
+        section, category = "Structure", "structure"
+        hint = "SKILL.md must start with YAML frontmatter containing 'name' and 'description'"
+    else:
+        section, category = f"ABI ({error.file})", "abi"
+        hint = (
+            f"{error.file} must be a YAML mapping matching the Sutras ABI ('version' is required)"
+        )
+
+    click.echo(click.style(section, fg="blue", bold=True))
+    click.echo(click.style("  ✗", fg="red") + f" {error.file} could not be parsed")
+    click.echo(click.style(f"    {hint}", fg="bright_black"))
+    click.echo()
+
+    errors: list[tuple[str, str, str | None]] = [(category, p, None) for p in error.problems]
+    _print_validation_summary(label, errors, [], strict)
+    return len(errors), 0
+
+
 def _run_validation_checks(skill: Skill, verbose: bool, strict: bool) -> tuple[int, int]:
     """Run all validation checks on a skill and print results.
 
     Returns (error_count, warning_count). Does not raise on validation
     failure — callers decide whether to abort.
     """
+    import os
     import re
 
     warnings: list[tuple[str, str, str | None]] = []  # (category, message, fix)
@@ -621,6 +724,24 @@ def _run_validation_checks(skill: Skill, verbose: bool, strict: bool) -> tuple[i
 
     def _err(category: str, msg: str, fix: str | None = None) -> None:
         errors.append((category, msg, fix))
+
+    def _check_tool_entries(entries: list[str], field: str, category: str) -> None:
+        for entry in entries:
+            if not entry.strip():
+                continue
+            base = parse_tool_entry(entry)
+            if base is None:
+                _warn(
+                    category,
+                    f"Malformed {field} entry '{entry}'",
+                    "Use 'ToolName' or 'ToolName(pattern)', separated by commas",
+                )
+            elif not is_known_tool(base):
+                _warn(
+                    category,
+                    f"Unknown tool '{base}' in {field}",
+                    "Check spelling against Claude Code tool names (e.g. Read, Write, Bash)",
+                )
 
     click.echo(click.style(f"Validating skill: {skill.name or '(unnamed)'}", fg="cyan", bold=True))
     click.echo()
@@ -641,11 +762,30 @@ def _run_validation_checks(skill: Skill, verbose: bool, strict: bool) -> tuple[i
             "Add 'name: my-skill' to the YAML frontmatter",
         )
     else:
-        if not re.match(r"^[a-z0-9][a-z0-9._-]*$", skill.name):
+        try:
+            bare_name = SkillName.parse(skill.name).name
+        except ValueError:
+            bare_name = skill.name
+
+        if not re.match(r"^[a-z0-9][a-z0-9._-]*$", bare_name):
             _warn(
                 "structure",
                 f"Name '{skill.name}' uses non-standard characters",
                 "Use lowercase alphanumeric, hyphens, underscores",
+            )
+        if len(skill.name) > MAX_NAME_LENGTH:
+            _err(
+                "structure",
+                f"Name is {len(skill.name)} chars (max {MAX_NAME_LENGTH})",
+                f"Shorten the name to {MAX_NAME_LENGTH} characters or fewer",
+            )
+
+        dir_name = skill.path.absolute().name
+        if dir_name != bare_name:
+            _warn(
+                "structure",
+                f"Name '{bare_name}' does not match directory name '{dir_name}'",
+                f"Rename the directory to '{bare_name}' or update 'name' in SKILL.md",
             )
         _ok(f"Name: {click.style(skill.name, fg='cyan')}")
 
@@ -657,7 +797,13 @@ def _run_validation_checks(skill: Skill, verbose: bool, strict: bool) -> tuple[i
         )
     else:
         desc_len = len(skill.description)
-        if desc_len < 20:
+        if desc_len > MAX_DESCRIPTION_LENGTH:
+            _err(
+                "structure",
+                f"Description is {desc_len} chars (max {MAX_DESCRIPTION_LENGTH})",
+                "Shorten the description and move detail into the instructions body",
+            )
+        elif desc_len < 20:
             _warn(
                 "structure",
                 f"Description very short ({desc_len} chars)",
@@ -680,6 +826,7 @@ def _run_validation_checks(skill: Skill, verbose: bool, strict: bool) -> tuple[i
 
     if skill.allowed_tools:
         _ok(f"Allowed tools: {', '.join(skill.allowed_tools)}")
+        _check_tool_entries(skill.allowed_tools, "allowed-tools", "structure")
 
     if skill.supporting_files:
         _ok(f"{len(skill.supporting_files)} supporting file(s)")
@@ -692,17 +839,14 @@ def _run_validation_checks(skill: Skill, verbose: bool, strict: bool) -> tuple[i
     if skill.abi:
         _ok("sutras.yaml found and parsed")
 
-        if not skill.abi.version:
-            _err("abi", "Missing 'version' field", "Add 'version: \"0.1.0\"' to sutras.yaml")
+        if _is_valid_semver(skill.abi.version):
+            _ok(f"Version: {click.style(skill.abi.version, fg='blue')}")
         else:
-            if not re.match(r"^\d+\.\d+\.\d+", skill.abi.version):
-                _err(
-                    "abi",
-                    f"Version '{skill.abi.version}' is not valid semver",
-                    "Use format: MAJOR.MINOR.PATCH (e.g., 1.0.0)",
-                )
-            else:
-                _ok(f"Version: {click.style(skill.abi.version, fg='blue')}")
+            _err(
+                "abi",
+                f"Version '{skill.abi.version}' is not valid semver",
+                "Use format: MAJOR.MINOR.PATCH[-prerelease] (e.g., 1.0.0, 1.0.0-beta.1)",
+            )
 
         if not skill.abi.author:
             _warn(
@@ -713,13 +857,50 @@ def _run_validation_checks(skill: Skill, verbose: bool, strict: bool) -> tuple[i
         else:
             _ok(f"Author: {skill.abi.author}")
 
-        if not skill.abi.license:
-            _warn("abi", "Missing 'license' field", "Add 'license: \"MIT\"' to sutras.yaml")
+        if "license" not in skill.abi.model_fields_set or not skill.abi.license:
+            _warn(
+                "abi",
+                "Missing 'license' field (defaults to MIT)",
+                "Add 'license: \"MIT\"' (or your license) to sutras.yaml",
+            )
         else:
             _ok(f"License: {skill.abi.license}")
 
         if skill.abi.repository:
             _ok(f"Repository: {skill.abi.repository}")
+
+        caps = skill.abi.capabilities
+        if caps:
+            _check_tool_entries(caps.tools, "capabilities.tools", "abi")
+
+            valid_deps = 0
+            for dep in caps.dependencies:
+                dep_name, constraint = (
+                    (dep, "*") if isinstance(dep, str) else (dep.name, dep.version)
+                )
+                problems_before = len(errors)
+                try:
+                    if not SkillName.parse(dep_name).is_scoped:
+                        _err(
+                            "abi",
+                            f"Dependency '{dep_name}' is not scoped and can't be resolved "
+                            "from a registry",
+                            "Use '@namespace/skill-name'",
+                        )
+                except ValueError as e:
+                    _err("abi", f"Invalid dependency name: {e}", "Use '@namespace/skill-name'")
+                try:
+                    VersionRange.parse(constraint)
+                except ValueError:
+                    _err(
+                        "abi",
+                        f"Invalid version constraint '{constraint}' for dependency '{dep_name}'",
+                        "Use npm-style constraints: ^1.0.0, ~1.2.3, >=1.0.0 <2.0.0, 1.x, *",
+                    )
+                if len(errors) == problems_before:
+                    valid_deps += 1
+            if valid_deps:
+                _ok(f"{valid_deps} valid dependenc{'y' if valid_deps == 1 else 'ies'}")
     else:
         _warn(
             "abi",
@@ -767,6 +948,68 @@ def _run_validation_checks(skill: Skill, verbose: bool, strict: bool) -> tuple[i
 
     click.echo()
 
+    # --- File references ---
+    file_refs = extract_file_references(skill.instructions)
+    tests_cfg = skill.abi.tests if skill.abi else None
+    fixtures_dir = (
+        tests_cfg.fixtures_dir
+        if tests_cfg and "fixtures_dir" in tests_cfg.model_fields_set
+        else None
+    )
+    dataset = skill.abi.eval.dataset if skill.abi and skill.abi.eval else None
+
+    if file_refs or fixtures_dir or dataset:
+        click.echo(click.style("Files", fg="blue", bold=True))
+
+        packaged = set(skill.supporting_files) | {"SKILL.md", "sutras.yaml"}
+        found_refs = 0
+        for ref in file_refs:
+            rel = Path(os.path.normpath(ref))
+            if not (skill.path / rel).exists():
+                _err(
+                    "files",
+                    f"SKILL.md links to missing file '{ref}'",
+                    "Create the file or fix the link",
+                )
+            elif rel.parts[:1] == ("..",):
+                _warn(
+                    "files",
+                    f"SKILL.md links to '{ref}', outside the skill directory",
+                    "Move it into the skill directory so it ships with the skill",
+                )
+            elif len(rel.parts) > 1 or rel.name not in packaged:
+                _warn(
+                    "files",
+                    f"SKILL.md links to '{ref}', which `sutras build` won't package",
+                    "Only top-level files are packaged; move it to the skill's root directory",
+                )
+            else:
+                found_refs += 1
+        if found_refs:
+            _ok(f"{found_refs} linked file(s) found")
+
+        if fixtures_dir:
+            if (skill.path / fixtures_dir).is_dir():
+                _ok(f"Fixtures directory: {fixtures_dir}")
+            else:
+                _warn(
+                    "testing",
+                    f"tests.fixtures_dir '{fixtures_dir}' does not exist",
+                    "Create the directory or remove 'fixtures_dir' from sutras.yaml",
+                )
+
+        if dataset:
+            if (skill.path / dataset).is_file():
+                _ok(f"Eval dataset: {dataset}")
+            else:
+                _err(
+                    "eval",
+                    f"eval.dataset '{dataset}' not found",
+                    "Create the dataset file or fix the path in sutras.yaml",
+                )
+
+        click.echo()
+
     # --- Testing config ---
     if verbose:
         click.echo(click.style("Testing", fg="blue", bold=True))
@@ -780,46 +1023,7 @@ def _run_validation_checks(skill: Skill, verbose: bool, strict: bool) -> tuple[i
             )
         click.echo()
 
-    # --- Per-skill summary ---
-    click.echo(click.style("─" * 50, fg="blue"))
-
-    if errors:
-        click.echo(click.style(f"Errors ({len(errors)}):", fg="red", bold=True))
-        for category, msg, fix in errors:
-            click.echo(click.style(f"  ✗ [{category}] ", fg="red") + msg)
-            if fix:
-                click.echo(click.style(f"    Fix: {fix}", fg="bright_black"))
-        click.echo()
-
-    if warnings:
-        click.echo(click.style(f"Warnings ({len(warnings)}):", fg="yellow", bold=True))
-        for category, msg, fix in warnings:
-            click.echo(click.style(f"  ⚠ [{category}] ", fg="yellow") + msg)
-            if fix:
-                click.echo(click.style(f"    Fix: {fix}", fg="bright_black"))
-        click.echo()
-
-    if errors:
-        click.echo(
-            click.style("✗ ", fg="red", bold=True)
-            + click.style(f"Skill '{skill.name}' has errors", fg="red")
-        )
-    elif strict and warnings:
-        click.echo(
-            click.style("✗ ", fg="red", bold=True)
-            + click.style(f"Skill '{skill.name}' has warnings (strict mode)", fg="red")
-        )
-    else:
-        status_parts = []
-        if not warnings:
-            status_parts.append("no issues found")
-        else:
-            status_parts.append(f"{len(warnings)} warning(s)")
-        click.echo(
-            click.style("✓ ", fg="green", bold=True)
-            + click.style(f"Skill '{skill.name}' is valid", fg="green")
-            + f" ({', '.join(status_parts)})"
-        )
+    _print_validation_summary(skill.name, errors, warnings, strict)
 
     return len(errors), len(warnings)
 
@@ -854,8 +1058,9 @@ def validate(
     """Validate a skill's structure and metadata.
 
     Accepts a skill name, a path to a skill directory, or --all to validate
-    every discovered skill. Checks SKILL.md structure, sutras.yaml schema,
-    version format, and distribution readiness.
+    every discovered skill. Checks SKILL.md structure and spec limits, allowed
+    tools, sutras.yaml schema, version and dependency constraints, linked
+    files, eval/test paths, and distribution readiness.
 
     \b
     Examples:
@@ -867,70 +1072,64 @@ def validate(
     """
     verbose = _verbose(ctx)
 
-    skills_to_check: list[Skill] = []
+    if skills_path:
+        loader = SkillLoader(
+            search_paths=[skills_path], include_global=False, include_project=False
+        )
+    else:
+        loader = SkillLoader()
 
-    try:
-        if all_:
-            if target:
-                raise click.UsageError("Cannot combine --all with a skill name or path")
-            if skills_path:
-                loader = SkillLoader(
-                    search_paths=[skills_path],
-                    include_global=False,
-                    include_project=False,
-                )
-            else:
-                loader = SkillLoader()
-            for name in loader.discover():
-                skills_to_check.append(loader.load(name))
-            if not skills_to_check:
-                click.echo(click.style("No skills found to validate.", fg="yellow", bold=True))
-                return
-        elif target:
-            target_path = Path(target)
-            if target_path.is_dir() and (target_path / "SKILL.md").exists():
-                skills_to_check.append(Skill.load(target_path))
-            else:
-                if skills_path:
-                    loader = SkillLoader(
-                        search_paths=[skills_path],
-                        include_global=False,
-                        include_project=False,
-                    )
-                else:
-                    loader = SkillLoader()
-                skills_to_check.append(loader.load(target))
+    targets: list[tuple[str, Path]] = []
+
+    if all_:
+        if target:
+            raise click.UsageError("Cannot combine --all with a skill name or path")
+        for name in loader.discover():
+            path = loader.find_path(name)
+            if path:
+                targets.append((name, path))
+        if not targets:
+            click.echo(click.style("No skills found to validate.", fg="yellow", bold=True))
+            return
+    elif target:
+        target_path = Path(target)
+        if target_path.is_dir() and (target_path / "SKILL.md").exists():
+            targets.append((target_path.absolute().name, target_path))
         else:
-            raise click.UsageError("Provide a skill name, a path, or use --all")
-    except FileNotFoundError as e:
-        skill_not_found(target or "(none)", str(e))
-    except ValueError as e:
-        invalid_skill(target or "(none)", str(e))
+            path = loader.find_path(target)
+            if path is None:
+                searched = ", ".join(str(p) for p in loader.search_paths) or "(none)"
+                skill_not_found(target, f"Searched: {searched}")
+            else:
+                targets.append((target, path))
+    else:
+        raise click.UsageError("Provide a skill name, a path, or use --all")
 
-    total_errors = 0
-    total_warnings = 0
     failed: list[str] = []
 
-    for i, skill in enumerate(skills_to_check):
+    for i, (label, path) in enumerate(targets):
         if i > 0:
             click.echo()
-        errs, warns = _run_validation_checks(skill, verbose, strict)
-        total_errors += errs
-        total_warnings += warns
+        try:
+            skill = Skill.load(path)
+        except SkillLoadError as e:
+            errs, warns = _report_load_failure(label, path, e, verbose, strict)
+            display_name = label
+        else:
+            errs, warns = _run_validation_checks(skill, verbose, strict)
+            display_name = skill.name or label
         if errs > 0 or (strict and warns > 0):
-            failed.append(skill.name or str(skill.path))
+            failed.append(display_name)
 
-    # Aggregate summary when validating multiple skills
-    if len(skills_to_check) > 1:
+    if len(targets) > 1:
         click.echo()
         click.echo(click.style("═" * 50, fg="blue"))
-        passed = len(skills_to_check) - len(failed)
+        passed = len(targets) - len(failed)
         parts = [click.style(f"{passed} passed", fg="green")]
         if failed:
             parts.append(click.style(f"{len(failed)} failed", fg="red"))
         click.echo(
-            click.style(f"Validated {len(skills_to_check)} skill(s): ", bold=True)
-            + ", ".join(parts)
+            click.style(f"Validated {len(targets)} skill(s): ", bold=True) + ", ".join(parts)
         )
         if failed:
             click.echo(click.style("  Failed: ", fg="red") + ", ".join(failed))

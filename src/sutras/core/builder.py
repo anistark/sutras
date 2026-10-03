@@ -122,7 +122,10 @@ class SkillBuilder:
                 }
 
             if self.skill.abi.capabilities and self.skill.abi.capabilities.dependencies:
-                manifest["dependencies"] = self.skill.abi.capabilities.dependencies
+                manifest["dependencies"] = [
+                    dep if isinstance(dep, str) else dep.model_dump()
+                    for dep in self.skill.abi.capabilities.dependencies
+                ]
 
         return manifest
 
