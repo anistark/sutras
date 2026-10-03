@@ -44,6 +44,13 @@ The engine — models, loaders, runners, and managers. All business logic lives 
 | `lockfile.py` | `.sutras.lock` format — lock file for reproducible installs |
 | `docgen.py` | Documentation generation from skill metadata |
 | `validation.py` | Limits, known tool names, and link extraction used by `sutras validate` |
+| `bench.py` | `BenchPlan`, `BenchRunner` (matrix runs, spend cap), `BenchReport`, history, `--record` compatibility |
+| `runtime/` | `RuntimeExecutor` protocol and `ClaudeCodeExecutor` (headless `claude -p`, stream-json parsing, model discovery) |
+| `sandbox.py` | Temp workspaces with the skill installed at project level; workspace diffs |
+| `assertions.py` | Deterministic bench assertions |
+| `judge.py` | Rubric grading with a fixed judge model |
+| `pricing.py` | Price table, model aliases, `model@effort` parsing |
+| `estimator.py` | Pre-run bench cost estimates (history, pilot, heuristic) |
 | `updater.py` | Self-update logic — checks PyPI, upgrades CLI, refreshes pi extension |
 
 ### 2. CLI Layer (`src/sutras/cli/main.py`)
@@ -60,6 +67,7 @@ A single `main.py` file with all Click commands. The CLI is the only entry point
 | `sutras validate <name\|path>` | Validate skill structure and ABI; supports `--all` to validate every discovered skill (CI-friendly) and `--path <dir>` to override the skills directory |
 | `sutras test <name>` | Run test cases from `sutras.yaml` |
 | `sutras eval <name>` | Run evaluations (Ragas framework) |
+| `sutras bench <name\|path>` | Benchmark a skill across models via headless Claude Code; shows models + estimated cost and asks before running. e.g. `sutras bench my-skill --models opus,sonnet --max-cost 5`, `--dry-run`, `--record` |
 | `sutras docs <name>` | Generate documentation from skill metadata |
 | `sutras build <name>` | Package skill into distributable tarball |
 | `sutras install <source>` | Install skill from registry, URL, GitHub, or local file |
@@ -271,6 +279,8 @@ This regenerates the pi extension files from CLI introspection. Check with `just
 - **ruff lint ignores B904.** Within except clauses, `raise from` is not required — this is intentional for CLI abort patterns.
 - **Optional dependency: `ragas`.** The eval command requires `pip install sutras[eval]`. Don't add ragas to core dependencies.
 - **Optional dependency: sphinx.** Docs build requires `pip install sutras[docs]`.
+- **Optional dependency: `anthropic`.** `sutras bench` uses it (`pip install sutras[bench]`) for model discovery and token counting, and falls back without it. Don't add it to core dependencies.
+- **Bench tests never call models.** Use a fake `RuntimeExecutor` (see `tests/test_bench.py`); real runs spend money and need Claude Code.
 - **Hardcoded `~/.claude/` paths.** The loader, installer, and config currently hardcode `~/.claude/` as the skills directory. This will change in v0.5 (runtime adapter system). For now, don't refactor these paths unless working on that feature.
 - **Registry is git-based.** Registries are cloned/pulled as git repos into `~/.sutras/registry-cache/`. No HTTP API — everything goes through git.
 

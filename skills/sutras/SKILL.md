@@ -3,8 +3,8 @@ name: sutras
 description: >
   Create, validate, test, build, and distribute Anthropic Agent Skills using the Sutras CLI.
   Use when the user asks to create a new skill, scaffold skill structure, validate SKILL.md files,
-  manage skill metadata, run skill tests/evaluations, build distributable packages, or publish
-  skills to registries. Requires sutras CLI.
+  manage skill metadata, run skill tests/evaluations, benchmark skills across models, build
+  distributable packages, or publish skills to registries. Requires sutras CLI.
 ---
 
 # Sutras — Skill Development Toolkit
@@ -15,6 +15,23 @@ scaffolding, validation, testing, evaluation, packaging, and distribution.
 ## Command Reference
 
 ```
+sutras bench <target>
+    Benchmark a skill across models with Claude Code.
+    --models: Comma-separated model IDs or aliases, optionally with @effort
+    --baseline: Model to compare against (default: bench.baseline or first)
+    --runs: Runs per case per model
+    --cases: Comma-separated subset of case names
+    --max-cost: Hard cap in USD
+    --yes/-y (flag): Skip the approval prompt (requires --max-cost)
+    --dry-run (flag): Show models, plan, and estimate without running
+    --pilot (flag): Run one case per model first to calibrate the estimate
+    --record (flag): Write the latest complete run into sutras.yaml
+    --report: Also write a Markdown report (JSON history is always saved)
+    --history (flag): List previous bench runs
+    --parallel: Concurrent runs
+    --keep-sandbox (flag): Keep run workspaces for debugging
+    --path: Custom skills directory to search for NAME
+
 sutras build <name>
     Build a distributable package for a skill.
     --output/-o: Output directory for the package (default: ./dist)

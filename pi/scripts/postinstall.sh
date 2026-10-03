@@ -6,7 +6,7 @@ set -euo pipefail
 
 PACKAGE="sutras"
 # ── AUTO-SYNC:MIN_VERSION ──
-MIN_VERSION="0.4.5"
+MIN_VERSION="0.5.0"
 # ── AUTO-SYNC:END ──
 
 # ── Version comparison ───────────────────────────────────────────────────────

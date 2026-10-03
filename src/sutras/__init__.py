@@ -15,6 +15,7 @@ except PackageNotFoundError:
     __version__ = "0.0.0.dev0"
 
 from sutras.core.abi import SutrasABI
+from sutras.core.bench import BenchPlan, BenchReport, BenchRunner
 from sutras.core.builder import BuildError, SkillBuilder
 from sutras.core.docgen import generate_docs, write_docs
 from sutras.core.loader import SkillLoader
@@ -25,6 +26,9 @@ __all__ = [
     "SkillMetadata",
     "SkillLoadError",
     "SutrasABI",
+    "BenchPlan",
+    "BenchReport",
+    "BenchRunner",
     "SkillLoader",
     "SkillBuilder",
     "BuildError",

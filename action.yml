@@ -19,7 +19,7 @@ inputs:
     required: false
     default: 'false'
   version:
-    description: 'Pin sutras version (e.g. 0.4.5). Defaults to latest on PyPI.'
+    description: 'Pin sutras version (e.g. 0.5.0). Defaults to latest on PyPI.'
     required: false
     default: ''
   verbose:

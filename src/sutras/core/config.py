@@ -9,6 +9,8 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, Field
 
+from sutras.core.pricing import ModelPrice
+
 
 class RegistryConfigEntry(BaseModel):
     """Configuration for a single registry."""
@@ -20,6 +22,13 @@ class RegistryConfigEntry(BaseModel):
     enabled: bool = Field(True, description="Whether this registry is enabled")
 
 
+class PriceOverride(BaseModel):
+    """Per-million-token price override for a model (used by `sutras bench`)."""
+
+    input: float = Field(..., ge=0, description="USD per million input tokens")
+    output: float = Field(..., ge=0, description="USD per million output tokens")
+
+
 class GlobalConfig(BaseModel):
     """Global Sutras configuration."""
 
@@ -29,6 +38,9 @@ class GlobalConfig(BaseModel):
     default_registry: str | None = Field(None, description="Default registry for publishing")
     cache_dir: str | None = Field(None, description="Custom cache directory")
     skills_dir: str | None = Field(None, description="Custom skills installation directory")
+    pricing: dict[str, PriceOverride] = Field(
+        default_factory=dict, description="Model price overrides keyed by model ID or alias"
+    )
 
 
 class SutrasConfig:
@@ -129,3 +141,10 @@ class SutrasConfig:
         if self.config.skills_dir:
             return Path(self.config.skills_dir)
         return self.DEFAULT_SKILLS_DIR
+
+    def get_price_overrides(self) -> dict[str, ModelPrice]:
+        """Get model price overrides from the `pricing` section."""
+        return {
+            model: ModelPrice(input=price.input, output=price.output)
+            for model, price in self.config.pricing.items()
+        }

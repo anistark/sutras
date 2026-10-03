@@ -92,6 +92,7 @@ async function handleSkillCommand(command: string, args: string[], ctx: Extensio
 
 // ── AUTO-GENERATED:START ──
 	const SUBCOMMANDS: { value: string; label: string }[] = [
+		{ value: "bench", label: "bench — Benchmark a skill across models with Claude Code." },
 		{ value: "build", label: "build — Build a distributable package for a skill." },
 		{ value: "completion", label: "completion — Generate shell completion script." },
 		{ value: "docs", label: "docs — Generate documentation for a skill." },

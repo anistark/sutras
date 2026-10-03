@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased](https://github.com/anistark/sutras/compare/v0.4.5...HEAD)
+## [Unreleased](https://github.com/anistark/sutras/compare/v0.5.0...HEAD)
+
+## [v0.5.0](https://github.com/anistark/sutras/compare/v0.4.5...v0.5.0) - 2026-10-03
 
 ### Added
 - GitHub Action (`action.yml` at repo root) — composite action wrapping `sutras validate` for use in GitHub Actions workflows; supports `path`, `skill`, `strict`, `version`, and `verbose` inputs
@@ -15,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `sutras validate` checks dependency names (must be `@namespace/name`) and version constraints
 - `sutras validate` flags SKILL.md links to missing files, files outside the skill directory, and files `sutras build` won't package (subdirectories)
 - `sutras validate` checks that `eval.dataset` and an explicitly set `tests.fixtures_dir` exist
+- `sutras bench` — benchmarks a skill across models through headless Claude Code: lists available models, shows an estimated cost range, and asks for approval before running; supports `--max-cost` hard cap, `--dry-run`, `--pilot` calibration, `model@effort` comparisons, and `--report md`
+- `bench` section in `sutras.yaml`: cases with prompts, workspaces, `should_trigger`, deterministic assertions, and rubric criteria graded by a fixed judge model
+- `sutras bench --record` writes a `compatibility` summary into `sutras.yaml`; shown by `sutras info` ("Tested on"), flagged as stale by `sutras validate`, and included by `sutras registry build-index`
+- `sutras info @namespace/skill` falls back to the registry entry when the skill isn't installed locally
+- `pricing` overrides in `~/.sutras/config.yaml` and a new `sutras[bench]` extra (Anthropic SDK for model discovery and token counting)
 
 ### Changed
 - `just publish` now chains `just tag` after PyPI and npm publishes, so a successful release always lands a matching git tag

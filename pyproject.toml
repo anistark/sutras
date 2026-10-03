@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "sutras"
-version = "0.4.5"
+version = "0.5.0"
 description = "Devtool for creating, testing, and distributing Anthropic Agent Skills with lifecycle management, Skill ABI, and federated registries"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -34,6 +34,9 @@ dependencies = [
 [project.optional-dependencies]
 eval = [
     "ragas>=0.4.3",
+]
+bench = [
+    "anthropic>=0.40.0",
 ]
 docs = [
     "sphinx>=8.1.0,<9",

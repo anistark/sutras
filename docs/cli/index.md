@@ -20,6 +20,7 @@ Test and evaluate skills:
 
 - [`sutras test`](test.md) - Run skill tests
 - [`sutras eval`](eval.md) - Evaluate with metrics
+- [`sutras bench`](bench.md) - Benchmark across models
 
 ### Distribution
 
@@ -52,6 +53,7 @@ validate
 docs
 test
 eval
+bench
 build
 publish
 install
