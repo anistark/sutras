@@ -1,21 +1,48 @@
 """Main CLI entry point for sutras - skill devtool."""
 
+import sys
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import click
 
 from sutras import Skill, SkillLoader, __version__
 from sutras.cli.errors import invalid_skill, operation_failed, skill_not_found
 from sutras.cli.progress import spinner
+from sutras.core.abi import BenchConfig
+from sutras.core.bench import (
+    BenchPlan,
+    BenchReport,
+    BenchRunner,
+    RunRecord,
+    build_compatibility,
+    compute_skill_hash,
+    latest_complete_report,
+    load_history,
+    render_markdown,
+    save_report,
+    write_compatibility,
+)
 from sutras.core.builder import BuildError, SkillBuilder
 from sutras.core.config import SutrasConfig
 from sutras.core.docgen import generate_docs, write_docs
+from sutras.core.estimator import CostEstimate, anthropic_token_counter, estimate_cost
 from sutras.core.evaluator import Evaluator
 from sutras.core.installer import SkillInstaller
+from sutras.core.judge import Judge
 from sutras.core.naming import SkillName
+from sutras.core.pricing import (
+    DEFAULT_BENCH_MODELS,
+    ModelPrice,
+    canonical_model_id,
+    get_price,
+    split_model_spec,
+)
 from sutras.core.publisher import PublishError, SkillPublisher
 from sutras.core.registry import RegistryManager
+from sutras.core.runtime import ClaudeCodeExecutor, ModelDiscovery
 from sutras.core.semver import Version, VersionRange
 from sutras.core.skill import SkillLoadError
 from sutras.core.test_runner import TestRunner
@@ -177,7 +204,13 @@ def info(name: str) -> None:
                 click.echo(f"  • {filename}")
             click.echo()
 
+        if skill.abi and skill.abi.compatibility:
+            stale = skill.abi.compatibility.skill_hash != compute_skill_hash(skill)
+            _print_compatibility(skill.abi.compatibility.model_dump(), stale=stale)
+
     except FileNotFoundError as e:
+        if name.startswith("@") and _print_registry_info(name):
+            return
         skill_not_found(name, str(e))
     except ValueError as e:
         invalid_skill(name, str(e))
@@ -612,6 +645,73 @@ eval:
         operation_failed("Running evaluation", str(e))
 
 
+def _print_compatibility(compat: dict[str, Any], stale: bool = False) -> None:
+    """Print a "Tested on" block from a compatibility record (as a dict)."""
+    header = f"Tested on ({compat.get('runtime', 'unknown')}, {compat.get('benched_at', '?')}):"
+    click.echo(click.style(header, fg="green", bold=True))
+    for model, result in (compat.get("results") or {}).items():
+        mark = (
+            click.style("✗", fg="red") if result.get("regression") else click.style("✓", fg="green")
+        )
+        baseline = " (baseline)" if model == compat.get("baseline") else ""
+        click.echo(
+            f"  {mark} {model}{baseline}: {result.get('pass_rate', 0):.0%} pass, "
+            f"{result.get('trigger_rate', 0):.0%} trigger, {result.get('runs', 0)} runs"
+        )
+    click.echo(click.style("  Author-reported results from `sutras bench`", fg="bright_black"))
+    if stale:
+        click.echo(click.style("  ⚠ Stale: the skill changed since these results", fg="yellow"))
+    click.echo()
+
+
+def _print_registry_info(name: str) -> bool:
+    """Show a registry entry for a skill that isn't installed locally."""
+    try:
+        registry_name, entry = RegistryManager().find_skill(name)
+    except Exception:
+        return False
+
+    click.echo(click.style("═" * 60, fg="blue"))
+    click.echo(click.style(f"  {entry.name}", fg="cyan", bold=True))
+    click.echo(click.style(f"  Version: {entry.version} · registry: {registry_name}", fg="blue"))
+    click.echo(click.style("═" * 60, fg="blue"))
+    click.echo()
+    if entry.description:
+        click.echo(click.style("Description:", fg="green", bold=True))
+        click.echo(f"  {entry.description}")
+        click.echo()
+    if entry.author:
+        click.echo(click.style("Author:", fg="green", bold=True))
+        click.echo(f"  {entry.author}")
+        click.echo()
+    if entry.compatibility:
+        _print_compatibility(entry.compatibility)
+    click.echo(
+        click.style(f"Not installed. Install with: sutras install {name}", fg="bright_black")
+    )
+    return True
+
+
+def _skill_loader(skills_path: Path | None) -> SkillLoader:
+    """Loader limited to ``skills_path`` when given, else the default search paths."""
+    if skills_path:
+        return SkillLoader(search_paths=[skills_path], include_global=False, include_project=False)
+    return SkillLoader()
+
+
+def _resolve_skill_path(target: str, loader: SkillLoader) -> Path:
+    """Resolve a skill name or a path to a skill directory; aborts if not found."""
+    target_path = Path(target)
+    if target_path.is_dir() and (target_path / "SKILL.md").exists():
+        return target_path
+    path = loader.find_path(target)
+    if path is None:
+        searched = ", ".join(str(p) for p in loader.search_paths) or "(none)"
+        skill_not_found(target, f"Searched: {searched}")
+        raise click.Abort()
+    return path
+
+
 def _is_valid_semver(version: str) -> bool:
     """Check that a version string is canonical semver (MAJOR.MINOR.PATCH[-prerelease])."""
     try:
@@ -1010,6 +1110,56 @@ def _run_validation_checks(skill: Skill, verbose: bool, strict: bool) -> tuple[i
 
         click.echo()
 
+    # --- Bench config and recorded results ---
+    bench_cfg = skill.abi.bench if skill.abi else None
+    compat = skill.abi.compatibility if skill.abi else None
+    if bench_cfg or compat:
+        click.echo(click.style("Bench", fg="blue", bold=True))
+
+    if bench_cfg:
+        names = [c.name for c in bench_cfg.cases]
+        duplicates = sorted({n for n in names if names.count(n) > 1})
+        if duplicates:
+            _err(
+                "bench",
+                f"Duplicate case name(s): {', '.join(duplicates)}",
+                "Give each case a unique name",
+            )
+        for spec in [*bench_cfg.models, bench_cfg.baseline, bench_cfg.judge]:
+            if not spec:
+                continue
+            try:
+                split_model_spec(spec)
+            except ValueError as e:
+                _err("bench", str(e), "Use 'model' or 'model@effort'")
+        for case in bench_cfg.cases:
+            if case.workspace and not (skill.path / case.workspace).is_dir():
+                _err(
+                    "bench",
+                    f"Case '{case.name}' workspace '{case.workspace}' not found",
+                    "Create the directory or fix 'workspace' in sutras.yaml",
+                )
+        if bench_cfg.cases:
+            _ok(f"{len(bench_cfg.cases)} bench case(s)")
+        else:
+            _warn("bench", "Bench section has no cases", "Add cases under 'bench.cases'")
+
+    if compat:
+        if compat.skill_hash != compute_skill_hash(skill):
+            _warn(
+                "bench",
+                f"Recorded bench results are stale (skill changed since {compat.benched_at})",
+                "Re-run `sutras bench` then `sutras bench --record`",
+            )
+        else:
+            tested = ", ".join(
+                f"{model} {result.pass_rate:.0%}" for model, result in compat.results.items()
+            )
+            _ok(f"Tested on: {tested}")
+
+    if bench_cfg or compat:
+        click.echo()
+
     # --- Testing config ---
     if verbose:
         click.echo(click.style("Testing", fg="blue", bold=True))
@@ -1072,13 +1222,7 @@ def validate(
     """
     verbose = _verbose(ctx)
 
-    if skills_path:
-        loader = SkillLoader(
-            search_paths=[skills_path], include_global=False, include_project=False
-        )
-    else:
-        loader = SkillLoader()
-
+    loader = _skill_loader(skills_path)
     targets: list[tuple[str, Path]] = []
 
     if all_:
@@ -1092,16 +1236,9 @@ def validate(
             click.echo(click.style("No skills found to validate.", fg="yellow", bold=True))
             return
     elif target:
-        target_path = Path(target)
-        if target_path.is_dir() and (target_path / "SKILL.md").exists():
-            targets.append((target_path.absolute().name, target_path))
-        else:
-            path = loader.find_path(target)
-            if path is None:
-                searched = ", ".join(str(p) for p in loader.search_paths) or "(none)"
-                skill_not_found(target, f"Searched: {searched}")
-            else:
-                targets.append((target, path))
+        path = _resolve_skill_path(target, loader)
+        label = path.absolute().name if Path(target).is_dir() else target
+        targets.append((label, path))
     else:
         raise click.UsageError("Provide a skill name, a path, or use --all")
 
@@ -1136,6 +1273,399 @@ def validate(
 
     if failed:
         raise click.Abort()
+
+
+def _split_csv(value: str | None) -> list[str]:
+    return [v.strip() for v in value.split(",") if v.strip()] if value else []
+
+
+def _usd(value: float) -> str:
+    return f"${value:,.2f}"
+
+
+def _price_label(price: ModelPrice | None) -> str:
+    if price is None:
+        return "price unknown"
+    return f"${price.input:g} / ${price.output:g} per MTok"
+
+
+def _select_bench_models(
+    requested: list[str], config: BenchConfig, discovery: ModelDiscovery
+) -> list[str]:
+    if requested:
+        return requested
+    if config.models:
+        return list(config.models)
+    available = {canonical_model_id(m.id) for m in discovery.models}
+    chosen = [m for m in DEFAULT_BENCH_MODELS if m in available]
+    return chosen or list(DEFAULT_BENCH_MODELS)
+
+
+def _print_bench_plan(
+    plan: BenchPlan,
+    executor: ClaudeCodeExecutor,
+    discovery: ModelDiscovery,
+    estimate: CostEstimate,
+    max_cost: float | None,
+    price_of: Callable[[str], ModelPrice | None],
+) -> None:
+    source = "Models API" if discovery.source == "api" else "Claude Code aliases"
+    version = executor.version() or "unknown version"
+    click.echo(click.style(f"Bench: {plan.skill.name}", fg="cyan", bold=True))
+    click.echo()
+    click.echo(f"Runtime:   Claude Code {version} (headless) · models from {source}")
+
+    selected = {canonical_model_id(m) for m in plan.models}
+    listed = {canonical_model_id(m.id) for m in discovery.models}
+    rows = [(m, True) for m in plan.models]
+    rows += [(m.id, False) for m in discovery.models if canonical_model_id(m.id) not in selected]
+    width = max(len(m) for m, _ in rows) + 2
+
+    click.echo("Models:")
+    for model, chosen in rows:
+        box = click.style("[x]", fg="green") if chosen else click.style("[ ]", fg="bright_black")
+        notes = []
+        if model == plan.baseline:
+            notes.append("baseline")
+        if chosen and canonical_model_id(model) not in listed:
+            notes.append("not listed by runtime")
+        suffix = f"   ({', '.join(notes)})" if notes else ""
+        click.echo(f"  {box} {model:<{width}} {_price_label(price_of(model))}{suffix}")
+
+    judged = f" + {plan.judged_runs} judge calls ({plan.config.judge})" if plan.judged_runs else ""
+    click.echo(
+        f"Plan:      {len(plan.cases)} case(s) × {plan.runs} run(s) × {len(plan.models)} model(s)"
+        f" = {plan.total_runs} runs{judged}"
+    )
+    click.echo(
+        f"Estimate:  {_usd(estimate.low)} – {_usd(estimate.high)}   "
+        + click.style(f"({estimate.method}: {estimate.detail})", fg="bright_black")
+    )
+    if estimate.unpriced:
+        click.echo(
+            click.style(
+                f"           excludes unpriced: {', '.join(estimate.unpriced)}", fg="yellow"
+            )
+        )
+    if max_cost is not None:
+        click.echo(f"Cap:       {_usd(max_cost)} — no run starts if it could exceed the cap")
+    else:
+        click.echo("Cap:       none " + click.style("(set one with --max-cost)", fg="yellow"))
+
+    if plan.shell_commands:
+        click.echo("Commands:  run in the sandbox after each session:")
+        for command in plan.shell_commands:
+            click.echo(f"             {command}")
+    if discovery.note:
+        click.echo(click.style(f"Note:      {discovery.note}", fg="bright_black"))
+    if discovery.source == "aliases":
+        click.echo(
+            click.style(
+                "           Costs are API-equivalent estimates; on a Claude subscription, runs "
+                "draw from your plan's usage limits.",
+                fg="bright_black",
+            )
+        )
+    click.echo()
+
+
+def _record_line(record: RunRecord) -> str:
+    mark = click.style("✓", fg="green") if record.passed else click.style("✗", fg="red")
+    cost = _usd(record.total_cost) if record.total_cost is not None else "cost unknown"
+    line = (
+        f"  {mark} {record.model} · {record.case} #{record.run} · {record.num_turns} turns · {cost}"
+    )
+    if record.passed:
+        return line
+    if record.error:
+        reason = record.error
+    elif not record.trigger_ok:
+        reason = "skill did not trigger" if not record.triggered else "skill triggered unexpectedly"
+    else:
+        failed = [a["description"] for a in record.assertions if not a["passed"]]
+        failed += [r["criterion"] for r in record.rubric if not r["passed"]]
+        reason = "failed: " + "; ".join(failed[:2]) if failed else "failed"
+    return line + click.style(f" · {reason}", fg="red")
+
+
+def _print_bench_summary(report: BenchReport) -> None:
+    summaries = report.summaries()
+    width = max(len(s.model) for s in summaries) + 2
+    click.echo()
+    header = f"{'':<{width}}{'trigger':>9}{'pass rate':>12}{'vs baseline':>14}{'cost':>10}"
+    click.echo(click.style(header, bold=True))
+    for s in summaries:
+        if s.delta is None:
+            verdict = f"{'—':>10}    "
+        else:
+            mark = click.style("✗", fg="red") if s.regression else click.style("✓", fg="green")
+            verdict = f"{s.delta * 100:>+9.0f}%   {mark}"
+        click.echo(
+            f"{s.model:<{width}}{f'{s.trigger_ok}/{s.runs}':>9}{s.pass_rate:>12.0%}"
+            f"{verdict:>14}{_usd(s.cost_usd):>10}"
+        )
+
+    for s in summaries:
+        if s.failed_cases:
+            cases = ", ".join(f"{c} ({p}/{n})" for c, (p, n) in s.failed_cases.items())
+            click.echo(click.style(f"  ✗ {s.model}: failed cases: {cases}", fg="red"))
+        if s.untriggered_cases:
+            cases = ", ".join(s.untriggered_cases)
+            click.echo(click.style(f"  ✗ {s.model}: wrong trigger behavior on: {cases}", fg="red"))
+
+    click.echo()
+    spent = f"Spent: {_usd(report.total_cost)}"
+    if report.unknown_cost_runs:
+        spent += f" (+ {report.unknown_cost_runs} run(s) with unknown cost)"
+    click.echo(spent)
+    if not report.complete:
+        click.echo(click.style(f"Incomplete: {report.stop_reason}", fg="yellow"))
+
+
+def _print_bench_history(skill: Skill) -> None:
+    history = load_history(skill)
+    if not history:
+        click.echo(click.style(f"No bench history for '{skill.name}'", fg="yellow"))
+        return
+    click.echo(click.style(f"Bench history for: {skill.name}", fg="cyan", bold=True))
+    click.echo()
+    for path, report in history[:20]:
+        status = "complete" if report.complete else f"incomplete ({report.stop_reason})"
+        kind = " [pilot]" if report.kind == "pilot" else ""
+        click.echo(f"  {report.started_at}{kind} · {status} · {_usd(report.total_cost)}")
+        rates = ", ".join(f"{s.model} {s.pass_rate:.0%}" for s in report.summaries())
+        click.echo(click.style(f"    {rates}", fg="bright_black"))
+        click.echo(click.style(f"    {path}", fg="bright_black"))
+
+
+def _record_bench(skill: Skill) -> None:
+    report = latest_complete_report(skill)
+    if report is None:
+        raise click.ClickException(
+            f"No complete bench run found for '{skill.name}'. Run `sutras bench` first."
+        )
+    if report.skill_hash != compute_skill_hash(skill):
+        raise click.ClickException(
+            f"The skill changed since the last complete bench ({report.started_at}). "
+            "Re-run `sutras bench` before recording."
+        )
+    write_compatibility(skill.path / "sutras.yaml", build_compatibility(report))
+    click.echo(
+        click.style("✓ ", fg="green", bold=True)
+        + f"Recorded results from {report.started_at} in {skill.path / 'sutras.yaml'}"
+    )
+
+
+def _confirm_spend(prompt: str, yes: bool) -> None:
+    if yes:
+        return
+    if not sys.stdin.isatty():
+        raise click.UsageError(
+            "Approval needed: pass --yes with --max-cost for non-interactive runs"
+        )
+    if not click.confirm(prompt, default=False):
+        raise click.Abort()
+
+
+@cli.command()
+@click.argument("target", metavar="NAME|PATH")
+@click.option("--models", help="Comma-separated model IDs or aliases, optionally with @effort")
+@click.option("--baseline", help="Model to compare against (default: bench.baseline or first)")
+@click.option("--runs", type=click.IntRange(min=1), help="Runs per case per model")
+@click.option("--cases", "case_names", help="Comma-separated subset of case names")
+@click.option("--max-cost", type=click.FloatRange(min=0, min_open=True), help="Hard cap in USD")
+@click.option("--yes", "-y", is_flag=True, help="Skip the approval prompt (requires --max-cost)")
+@click.option("--dry-run", is_flag=True, help="Show models, plan, and estimate without running")
+@click.option(
+    "--pilot", is_flag=True, help="Run one case per model first to calibrate the estimate"
+)
+@click.option("--record", is_flag=True, help="Write the latest complete run into sutras.yaml")
+@click.option(
+    "--report",
+    "report_format",
+    type=click.Choice(["md"]),
+    help="Also write a Markdown report (JSON history is always saved)",
+)
+@click.option("--history", "show_history", is_flag=True, help="List previous bench runs")
+@click.option(
+    "--parallel", type=click.IntRange(1, 16), default=2, show_default=True, help="Concurrent runs"
+)
+@click.option("--keep-sandbox", is_flag=True, help="Keep run workspaces for debugging")
+@click.option(
+    "--path",
+    "skills_path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    help="Custom skills directory to search for NAME",
+)
+@click.pass_context
+def bench(
+    ctx: click.Context,
+    target: str,
+    models: str | None,
+    baseline: str | None,
+    runs: int | None,
+    case_names: str | None,
+    max_cost: float | None,
+    yes: bool,
+    dry_run: bool,
+    pilot: bool,
+    record: bool,
+    report_format: str | None,
+    show_history: bool,
+    parallel: int,
+    keep_sandbox: bool,
+    skills_path: Path | None,
+) -> None:
+    """Benchmark a skill across models with Claude Code.
+
+    Runs each case in the skill's `bench` section on every selected model in an
+    isolated sandbox, grades runs with assertions and an optional rubric judge,
+    and compares pass rates against a baseline. Shows available models and an
+    estimated cost, and asks for approval before spending anything.
+
+    Exits non-zero when a model regresses past `max_regression` or the run is
+    incomplete.
+
+    \b
+    Examples:
+      sutras bench my-skill --dry-run
+      sutras bench my-skill --models opus,sonnet --runs 5 --max-cost 5
+      sutras bench my-skill --yes --max-cost 10 --report md
+      sutras bench my-skill --history
+      sutras bench my-skill --record
+    """
+    path = _resolve_skill_path(target, _skill_loader(skills_path))
+    try:
+        skill = Skill.load(path)
+    except SkillLoadError as e:
+        invalid_skill(target, str(e))
+        return
+
+    if show_history:
+        _print_bench_history(skill)
+        return
+    if record:
+        _record_bench(skill)
+        return
+
+    config = skill.abi.bench if skill.abi else None
+    if config is None or not config.cases:
+        raise click.ClickException(
+            f"Skill '{skill.name}' has no bench cases. Add a 'bench' section with 'cases' "
+            "to sutras.yaml."
+        )
+
+    executor = ClaudeCodeExecutor()
+    if not executor.available():
+        raise click.ClickException(
+            "Claude Code CLI ('claude') not found on PATH. "
+            "Install it from https://code.claude.com/docs"
+        )
+
+    selected_cases = config.cases
+    if case_names:
+        wanted = _split_csv(case_names)
+        unknown = [n for n in wanted if n not in {c.name for c in config.cases}]
+        if unknown:
+            raise click.UsageError(f"Unknown case(s): {', '.join(unknown)}")
+        selected_cases = [c for c in config.cases if c.name in wanted]
+
+    overrides = SutrasConfig().get_price_overrides()
+
+    def price_of(model: str) -> ModelPrice | None:
+        return get_price(model, overrides)
+
+    with spinner("Discovering models..."):
+        discovery = executor.discover_models(overrides)
+
+    model_specs = _select_bench_models(_split_csv(models), config, discovery)
+    baseline_spec = baseline or config.baseline or model_specs[0]
+    if baseline_spec not in model_specs:
+        model_specs.insert(0, baseline_spec)
+    for spec in [*model_specs, config.judge]:
+        try:
+            split_model_spec(spec)
+        except ValueError as e:
+            raise click.UsageError(str(e))
+
+    plan = BenchPlan(
+        skill=skill,
+        config=config,
+        models=model_specs,
+        baseline=baseline_spec,
+        cases=selected_cases,
+        runs=runs or config.runs,
+    )
+    cap = max_cost if max_cost is not None else config.max_cost
+    if yes and cap is None:
+        raise click.UsageError("--yes requires --max-cost (or bench.max_cost in sutras.yaml)")
+
+    judge = Judge(executor, config.judge) if any(c.rubric for c in plan.cases) else None
+    counter = anthropic_token_counter()
+
+    def history_reports() -> list[BenchReport]:
+        return [r for _, r in load_history(skill)]
+
+    if pilot and not dry_run:
+        pilot_plan = plan.pilot()
+        pilot_estimate = estimate_cost(pilot_plan, price_of, history_reports(), counter)
+        click.echo(
+            f"Pilot: {pilot_plan.total_runs} run(s), estimated "
+            f"{_usd(pilot_estimate.low)} – {_usd(pilot_estimate.high)}"
+        )
+        _confirm_spend("Run pilot?", yes)
+        pilot_report = BenchRunner(
+            pilot_plan,
+            executor,
+            judge=judge,
+            max_cost=cap,
+            parallel=parallel,
+            keep_sandbox=keep_sandbox,
+            reserve_per_run=pilot_estimate.per_run_high,
+            on_record=lambda r: click.echo(_record_line(r)),
+            sutras_version=__version__,
+        ).run(kind="pilot")
+        save_report(pilot_report, skill)
+        click.echo(f"Pilot spent {_usd(pilot_report.total_cost)}")
+        click.echo()
+        if cap is not None:
+            cap = max(cap - pilot_report.total_cost, 0.01)
+
+    estimate = estimate_cost(plan, price_of, history_reports(), counter)
+    _print_bench_plan(plan, executor, discovery, estimate, cap, price_of)
+    if dry_run:
+        return
+
+    _confirm_spend("Proceed?", yes)
+    click.echo()
+
+    report = BenchRunner(
+        plan,
+        executor,
+        judge=judge,
+        max_cost=cap,
+        parallel=parallel,
+        keep_sandbox=keep_sandbox,
+        reserve_per_run=estimate.per_run_high,
+        on_record=lambda r: click.echo(_record_line(r)),
+        sutras_version=__version__,
+    ).run()
+
+    _print_bench_summary(report)
+    saved = save_report(report, skill)
+    click.echo(click.style(f"Saved: {saved}", fg="bright_black"))
+    if report_format == "md":
+        md_path = saved.with_suffix(".md")
+        md_path.write_text(render_markdown(report))
+        click.echo(click.style(f"Report: {md_path}", fg="bright_black"))
+    if report.complete:
+        click.echo(
+            "Record results in sutras.yaml: "
+            + click.style(f"sutras bench {target} --record", fg="cyan")
+        )
+
+    if report.has_regression or not report.complete:
+        ctx.exit(1)
 
 
 @cli.command()

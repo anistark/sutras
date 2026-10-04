@@ -33,6 +33,9 @@ class SkillIndexEntry(BaseModel):
     versions: dict[str, str] = Field(
         default_factory=dict, description="Available versions (version -> tarball_url)"
     )
+    compatibility: dict[str, Any] | None = Field(
+        None, description="Cross-model bench summary recorded by `sutras bench --record`"
+    )
 
 
 class RegistryMetadata(BaseModel):
@@ -283,6 +286,7 @@ class RegistryManager:
                 tarball_url=tarball_url,
                 checksum=checksum,
                 versions={version: tarball_url} if tarball_url else {},
+                compatibility=skill_data.get("compatibility"),
             )
 
         index = RegistryIndex(skills=skills)

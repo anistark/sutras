@@ -22,6 +22,7 @@ Sutras is a CLI tool and library for creating, validating, and managing [Anthrop
 - **Discover**: List and inspect available skills in your workspace
 - **Manage**: Organize skills with versioning and metadata
 - **Test & Evaluate**: Run tests and evaluate skills with metrics
+- **Benchmark**: Check that a skill holds up across models (Opus, Sonnet, Haiku) with cost estimates and approval before spending
 - **Package**: Build distributable tarballs with checksums
 - **Distribute**: Publish and install skills from federated Git-based registries
 - **Integrations**: First-class support for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [pi](https://github.com/badlogic/pi)
@@ -133,7 +134,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: anistark/sutras@v0.4.5
+      - uses: anistark/sutras@v0.5.0
         with:
           path: skills/
           strict: true
@@ -146,10 +147,10 @@ Inputs:
 | `path`    | Skills directory to validate                                  | `.`     |
 | `skill`   | Validate a single skill by name or path (omit for all skills) | —       |
 | `strict`  | Treat warnings as errors                                      | `false` |
-| `version` | Pin a specific sutras version (e.g. `0.4.5`)                  | latest  |
+| `version` | Pin a specific sutras version (e.g. `0.5.0`)                  | latest  |
 | `verbose` | Enable verbose output                                         | `false` |
 
-Pin to a major tag (`@v0`) for automatic patch updates, or to an exact release (`@v0.4.5`) for full reproducibility.
+Pin to a major tag (`@v0`) for automatic patch updates, or to an exact release (`@v0.5.0`) for full reproducibility.
 
 ## CLI Reference
 
@@ -176,6 +177,10 @@ sutras test <name> [--verbose] [--fail-fast]
 
 # Evaluate with metrics
 sutras eval <name> [--verbose] [--no-history] [--show-history]
+
+# Benchmark across models (shows models + estimated cost, asks before running)
+sutras bench <name|path> [--models LIST] [--runs N] [--max-cost USD] [--dry-run]
+sutras bench <name> --record   # write results into sutras.yaml
 ```
 
 ### Setup & Maintenance
