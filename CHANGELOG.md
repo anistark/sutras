@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - GitHub Action (`action.yml` at repo root) — composite action wrapping `sutras validate` for use in GitHub Actions workflows; supports `path`, `skill`, `strict`, `version`, and `verbose` inputs
-- `just tag` recipe — creates an annotated `v<version>` git tag from `pyproject.toml` and pushes it to `origin`
+- `just tag` recipe — creates an annotated `v<version>` git tag from `pyproject.toml` and pushes it to `origin`, then moves the major tag (`v0`) so the GitHub Action can be pinned to `@v0` (skipped for prereleases)
 - `sutras validate` checks Agent Skills spec limits (name ≤ 64 chars, description ≤ 1024 chars) and warns when the skill name doesn't match its directory
 - `sutras validate` warns on unknown or malformed `allowed-tools` / `capabilities.tools` entries (supports `Tool(pattern)` and `mcp__*` tools)
 - `sutras validate` checks dependency names (must be `@namespace/name`) and version constraints
@@ -21,13 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `bench` section in `sutras.yaml`: cases with prompts, workspaces, `should_trigger`, deterministic assertions, and rubric criteria graded by a fixed judge model
 - `sutras bench --record` writes a `compatibility` summary into `sutras.yaml`; shown by `sutras info` ("Tested on"), flagged as stale by `sutras validate`, and included by `sutras registry build-index`
 - `sutras info @namespace/skill` falls back to the registry entry when the skill isn't installed locally
-- `pricing` overrides in `~/.sutras/config.yaml` and a new `sutras[bench]` extra (Anthropic SDK for model discovery and token counting)
+- `pricing` overrides in `~/.sutras/config.yaml` and a new `sutras[bench]` extra (Anthropic SDK for model discovery and token counting); the `haiku` alias and default models use Haiku 5.5, matching what Claude Code runs
 
 ### Changed
 - `just publish` now chains `just tag` after PyPI and npm publishes, so a successful release always lands a matching git tag
 - `sutras validate` reports unparseable `SKILL.md`/`sutras.yaml` as categorized errors in the normal report (one per problem, e.g. each schema field) instead of aborting
 - `sutras validate --all` keeps going past broken skills and counts them as failed in the summary
 - Version check now uses the semver parser: rejects trailing junk (`1.0.0garbage`), `v` prefixes and leading zeros; accepts prereleases (`1.0.0-beta.1`)
+- Dev dependencies moved from the deprecated `[tool.uv] dev-dependencies` to `[dependency-groups]`
 
 ### Fixed
 - Invalid or empty `sutras.yaml` crashed skill loading with an uncaught YAML/`TypeError`; now raises `SkillLoadError` (a `ValueError`) with a one-line message

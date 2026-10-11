@@ -15,7 +15,7 @@ import yaml
 from sutras.core.abi import BenchCase, BenchConfig, CompatibilityRecord, ModelCompatibility
 from sutras.core.assertions import evaluate
 from sutras.core.judge import Judge, JudgeResult, RubricVerdict
-from sutras.core.pricing import split_model_spec
+from sutras.core.pricing import format_usd, split_model_spec
 from sutras.core.runtime.base import RunRequest, RuntimeExecutor
 from sutras.core.sandbox import Sandbox, skill_install_name
 from sutras.core.skill import Skill
@@ -485,7 +485,7 @@ def render_markdown(report: BenchReport) -> str:
             verdict = f"{s.delta * 100:+.0f}% {'❌' if s.regression else '✅'}"
         lines.append(
             f"| `{s.model}` | {s.trigger_ok}/{s.runs} | {s.pass_rate:.0%} | {verdict} "
-            f"| ${s.cost_usd:.2f} |"
+            f"| {format_usd(s.cost_usd)} |"
         )
 
     failures = [s for s in report.summaries() if s.failed_cases or s.untriggered_cases]
@@ -499,5 +499,9 @@ def render_markdown(report: BenchReport) -> str:
                 lines.append(f"- `{s.model}` · wrong trigger behavior on: {cases}")
 
     status = "complete" if report.complete else f"incomplete ({report.stop_reason})"
-    lines += ["", f"Total cost: ${report.total_cost:.2f} · {status} · {report.started_at}", ""]
+    lines += [
+        "",
+        f"Total cost: {format_usd(report.total_cost)} · {status} · {report.started_at}",
+        "",
+    ]
     return "\n".join(lines)

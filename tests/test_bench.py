@@ -28,7 +28,13 @@ from sutras.core.bench import (
 )
 from sutras.core.estimator import estimate_cost
 from sutras.core.judge import Judge
-from sutras.core.pricing import ModelPrice, canonical_model_id, get_price, split_model_spec
+from sutras.core.pricing import (
+    ModelPrice,
+    canonical_model_id,
+    format_usd,
+    get_price,
+    split_model_spec,
+)
 from sutras.core.registry import RegistryManager
 from sutras.core.runtime import (
     ClaudeCodeExecutor,
@@ -168,7 +174,7 @@ class TestPricing:
             split_model_spec("opus@turbo")
 
     def test_get_price_with_overrides(self):
-        assert get_price("haiku") == ModelPrice(1.0, 5.0)
+        assert get_price("haiku") == ModelPrice(0.1, 0.5)
         assert get_price("custom-model") is None
         override = {"claude-opus-5-5": ModelPrice(1.0, 2.0)}
         assert get_price("opus", override) == ModelPrice(1.0, 2.0)
@@ -177,6 +183,11 @@ class TestPricing:
         price = ModelPrice(4.0, 20.0)
         assert price.cost(input_tokens=1_000_000, output_tokens=1_000_000) == 24.0
         assert price.cost(cache_read_tokens=1_000_000) == pytest.approx(0.4)
+
+    def test_format_usd_keeps_sub_cent_costs(self):
+        assert format_usd(0.00139098) == "$0.0014"
+        assert format_usd(0) == "$0.00"
+        assert format_usd(1234.5) == "$1,234.50"
 
 
 class TestAbi:

@@ -37,6 +37,7 @@ from sutras.core.pricing import (
     DEFAULT_BENCH_MODELS,
     ModelPrice,
     canonical_model_id,
+    format_usd,
     get_price,
     split_model_spec,
 )
@@ -1279,10 +1280,6 @@ def _split_csv(value: str | None) -> list[str]:
     return [v.strip() for v in value.split(",") if v.strip()] if value else []
 
 
-def _usd(value: float) -> str:
-    return f"${value:,.2f}"
-
-
 def _price_label(price: ModelPrice | None) -> str:
     if price is None:
         return "price unknown"
@@ -1338,7 +1335,7 @@ def _print_bench_plan(
         f" = {plan.total_runs} runs{judged}"
     )
     click.echo(
-        f"Estimate:  {_usd(estimate.low)} – {_usd(estimate.high)}   "
+        f"Estimate:  {format_usd(estimate.low)} – {format_usd(estimate.high)}   "
         + click.style(f"({estimate.method}: {estimate.detail})", fg="bright_black")
     )
     if estimate.unpriced:
@@ -1348,7 +1345,7 @@ def _print_bench_plan(
             )
         )
     if max_cost is not None:
-        click.echo(f"Cap:       {_usd(max_cost)} — no run starts if it could exceed the cap")
+        click.echo(f"Cap:       {format_usd(max_cost)} — no run starts if it could exceed the cap")
     else:
         click.echo("Cap:       none " + click.style("(set one with --max-cost)", fg="yellow"))
 
@@ -1371,7 +1368,7 @@ def _print_bench_plan(
 
 def _record_line(record: RunRecord) -> str:
     mark = click.style("✓", fg="green") if record.passed else click.style("✗", fg="red")
-    cost = _usd(record.total_cost) if record.total_cost is not None else "cost unknown"
+    cost = format_usd(record.total_cost) if record.total_cost is not None else "cost unknown"
     line = (
         f"  {mark} {record.model} · {record.case} #{record.run} · {record.num_turns} turns · {cost}"
     )
@@ -1402,7 +1399,7 @@ def _print_bench_summary(report: BenchReport) -> None:
             verdict = f"{s.delta * 100:>+9.0f}%   {mark}"
         click.echo(
             f"{s.model:<{width}}{f'{s.trigger_ok}/{s.runs}':>9}{s.pass_rate:>12.0%}"
-            f"{verdict:>14}{_usd(s.cost_usd):>10}"
+            f"{verdict:>14}{format_usd(s.cost_usd):>10}"
         )
 
     for s in summaries:
@@ -1414,7 +1411,7 @@ def _print_bench_summary(report: BenchReport) -> None:
             click.echo(click.style(f"  ✗ {s.model}: wrong trigger behavior on: {cases}", fg="red"))
 
     click.echo()
-    spent = f"Spent: {_usd(report.total_cost)}"
+    spent = f"Spent: {format_usd(report.total_cost)}"
     if report.unknown_cost_runs:
         spent += f" (+ {report.unknown_cost_runs} run(s) with unknown cost)"
     click.echo(spent)
@@ -1432,7 +1429,7 @@ def _print_bench_history(skill: Skill) -> None:
     for path, report in history[:20]:
         status = "complete" if report.complete else f"incomplete ({report.stop_reason})"
         kind = " [pilot]" if report.kind == "pilot" else ""
-        click.echo(f"  {report.started_at}{kind} · {status} · {_usd(report.total_cost)}")
+        click.echo(f"  {report.started_at}{kind} · {status} · {format_usd(report.total_cost)}")
         rates = ", ".join(f"{s.model} {s.pass_rate:.0%}" for s in report.summaries())
         click.echo(click.style(f"    {rates}", fg="bright_black"))
         click.echo(click.style(f"    {path}", fg="bright_black"))
@@ -1611,7 +1608,7 @@ def bench(
         pilot_estimate = estimate_cost(pilot_plan, price_of, history_reports(), counter)
         click.echo(
             f"Pilot: {pilot_plan.total_runs} run(s), estimated "
-            f"{_usd(pilot_estimate.low)} – {_usd(pilot_estimate.high)}"
+            f"{format_usd(pilot_estimate.low)} – {format_usd(pilot_estimate.high)}"
         )
         _confirm_spend("Run pilot?", yes)
         pilot_report = BenchRunner(
@@ -1626,7 +1623,7 @@ def bench(
             sutras_version=__version__,
         ).run(kind="pilot")
         save_report(pilot_report, skill)
-        click.echo(f"Pilot spent {_usd(pilot_report.total_cost)}")
+        click.echo(f"Pilot spent {format_usd(pilot_report.total_cost)}")
         click.echo()
         if cap is not None:
             cap = max(cap - pilot_report.total_cost, 0.01)

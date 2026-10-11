@@ -47,7 +47,7 @@ Add a `bench` section to `sutras.yaml`:
 ```yaml
 bench:
   baseline: claude-opus-5-5
-  models: [claude-opus-5-5, claude-sonnet-5-5, claude-haiku-4-5]
+  models: [claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5]
   runs: 5
   max_regression: 0.10      # flag models >10 points below the baseline pass rate
   max_cost: 10.00

@@ -3,7 +3,7 @@
 import re
 from dataclasses import dataclass
 
-PRICES_AS_OF = "2026-09-25"
+PRICES_AS_OF = "2026-10-11"
 """Date the built-in price table was last checked against Anthropic's published rates."""
 
 
@@ -49,6 +49,9 @@ DEFAULT_PRICES: dict[str, ModelPrice] = {
     "claude-sonnet-5-5": ModelPrice(2.0, 10.0),
     "claude-sonnet-5": ModelPrice(2.0, 10.0),
     "claude-sonnet-4-6": ModelPrice(3.0, 15.0),
+    # NOTE: Haiku 5.5 rises to $0.50 / $2.50 above 100K prompt tokens; the table has no
+    # long-context tiers, so very long bench runs on it are underestimated.
+    "claude-haiku-5-5": ModelPrice(0.1, 0.5),
     "claude-haiku-4-5": ModelPrice(1.0, 5.0),
 }
 
@@ -58,15 +61,22 @@ MODEL_ALIASES: dict[str, str] = {
     "fable": "claude-fable-5-1",
     "opus": "claude-opus-5-5",
     "sonnet": "claude-sonnet-5-5",
-    "haiku": "claude-haiku-4-5",
+    "haiku": "claude-haiku-5-5",
 }
 
-DEFAULT_BENCH_MODELS = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5"]
+DEFAULT_BENCH_MODELS = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]
 """Current-generation models benched by default when available."""
 
 EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
 
 _DATE_SUFFIX_RE = re.compile(r"-\d{8}$")
+
+
+def format_usd(value: float) -> str:
+    """Format a USD amount, keeping sub-cent costs visible (``$0.0014``, not ``$0.00``)."""
+    if 0 < abs(value) < 0.01:
+        return f"${value:.4f}"
+    return f"${value:,.2f}"
 
 
 def split_model_spec(spec: str) -> tuple[str, str | None]:

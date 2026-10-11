@@ -69,7 +69,7 @@ check-versions:
     fi
     echo "✓ Versions in sync: $pypi_ver"
 
-# Tag current version and push tag to origin
+# Tag current version, move the major tag (e.g. v0) for the GitHub Action, and push both
 tag:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -83,6 +83,14 @@ tag:
     fi
     echo "⬆  Pushing $tag to origin"
     git push origin "$tag"
+    if [[ "$ver" == *-* ]]; then
+        echo "⚠  $tag is a prerelease, leaving the major tag alone"
+        exit 0
+    fi
+    major="v${ver%%.*}"
+    echo "🏷  Moving $major to $tag"
+    git tag -fa "$major" -m "Latest $major release ($tag)" "$tag^{commit}"
+    git push -f origin "$major"
 
 # Publish everything (PyPI + npm + git tag)
 publish: check-versions publish-pypi publish-npm tag
