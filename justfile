@@ -92,15 +92,28 @@ tag:
     git tag -fa "$major" -m "Latest $major release ($tag)" "$tag^{commit}"
     git push -f origin "$major"
 
-# Publish everything (PyPI + npm + git tag)
-publish: check-versions publish-pypi publish-npm tag
+# Publish everything: push the tag (CI publishes to PyPI), wait for it, then publish to npm
+publish: check-versions tag wait-release publish-npm
 
-# Publish CLI to PyPI (requires credentials in ~/.pypirc)
-publish-pypi: clean build
-    @echo "🔨 Building package..."
-    uv build --sdist --wheel
-    @echo "📦 Publishing to PyPI..."
-    uv publish --token "$(grep -A2 '\[pypi\]' ~/.pypirc | grep password | cut -d'=' -f2- | xargs)"
+# Wait for the Release workflow on the current version's tag (PyPI trusted publishing)
+wait-release:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ver=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+    tag="v$ver"
+    echo "⏳ Waiting for the Release workflow on $tag..."
+    run_id=""
+    for _ in $(seq 1 30); do
+        run_id=$(gh run list --workflow release.yml --event push --branch "$tag" --limit 1 \
+            --json databaseId --jq '.[0].databaseId // empty')
+        [[ -n "$run_id" ]] && break
+        sleep 2
+    done
+    if [[ -z "$run_id" ]]; then
+        echo "✗ No Release workflow run found for $tag" >&2
+        exit 1
+    fi
+    gh run watch "$run_id" --exit-status
 
 # Publish pi extension to npm
 publish-npm:

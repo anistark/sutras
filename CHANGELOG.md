@@ -24,7 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `pricing` overrides in `~/.sutras/config.yaml` and a new `sutras[bench]` extra (Anthropic SDK for model discovery and token counting); the `haiku` alias and default models use Haiku 5.5, matching what Claude Code runs
 
 ### Changed
-- `just publish` now chains `just tag` after PyPI and npm publishes, so a successful release always lands a matching git tag
+- PyPI releases publish from GitHub Actions with trusted publishing (`.github/workflows/release.yml`, on `v*.*.*` tags) instead of a local API token
+- `just publish` pushes the tag, waits for the Release workflow to publish to PyPI, then publishes to npm; `just publish-pypi` is removed
 - `sutras validate` reports unparseable `SKILL.md`/`sutras.yaml` as categorized errors in the normal report (one per problem, e.g. each schema field) instead of aborting
 - `sutras validate --all` keeps going past broken skills and counts them as failed in the summary
 - Version check now uses the semver parser: rejects trailing junk (`1.0.0garbage`), `v` prefixes and leading zeros; accepts prereleases (`1.0.0-beta.1`)

@@ -157,8 +157,9 @@ just sutras list
 
 | Command | What it does |
 |---------|-------------|
-| `just publish` | Publish to PyPI + npm |
-| `just publish-pypi` | PyPI only |
+| `just publish` | Tag the release (CI publishes to PyPI), wait for the Release workflow, then publish to npm |
+| `just tag` | Push the `v<version>` tag and move the `v0` major tag |
+| `just wait-release` | Wait for the Release workflow on the current tag to succeed |
 | `just publish-npm` | npm only (pi extension) |
 | `just publish-test` | Test PyPI + npm dry run |
 | `just check-versions` | Verify pyproject.toml and pi/package.json versions match |
