@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased](https://github.com/anistark/sutras/compare/v0.5.0...HEAD)
 
-## [v0.5.0](https://github.com/anistark/sutras/compare/v0.4.5...v0.5.0) - 2026-10-03
+## [v0.5.0](https://github.com/anistark/sutras/compare/v0.4.5...v0.5.0) - 2026-10-11
 
 ### Added
 - GitHub Action (`action.yml` at repo root) — composite action wrapping `sutras validate` for use in GitHub Actions workflows; supports `path`, `skill`, `strict`, `version`, and `verbose` inputs

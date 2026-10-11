@@ -281,7 +281,7 @@ This regenerates the pi extension files from CLI introspection. Check with `just
 - **Optional dependency: sphinx.** Docs build requires `pip install sutras[docs]`.
 - **Optional dependency: `anthropic`.** `sutras bench` uses it (`pip install sutras[bench]`) for model discovery and token counting, and falls back without it. Don't add it to core dependencies.
 - **Bench tests never call models.** Use a fake `RuntimeExecutor` (see `tests/test_bench.py`); real runs spend money and need Claude Code.
-- **Hardcoded `~/.claude/` paths.** The loader, installer, and config currently hardcode `~/.claude/` as the skills directory. This will change in v0.5 (runtime adapter system). For now, don't refactor these paths unless working on that feature.
+- **Hardcoded `~/.claude/` paths.** The loader, installer, and config currently hardcode `~/.claude/` as the skills directory. This will change in v0.6 (runtime adapter system). For now, don't refactor these paths unless working on that feature.
 - **Registry is git-based.** Registries are cloned/pulled as git repos into `~/.sutras/registry-cache/`. No HTTP API — everything goes through git.
 
 ---
